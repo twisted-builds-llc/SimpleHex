@@ -6,7 +6,7 @@
   <date>2026-11-02</date>
   <maintainer email="dalefollett18@yahoo.com">Dale Follett</maintainer>
   <license file="LICENSE">LGPL-2.1-or-later</license>
-  <url type="repository" branch="main">https://github.com/REPLACE_ME/hexagons_for_FreeCAD</url>
+  <url type="repository" branch="main">https://github.com/twisted-builds-llc/hexagons_for_FreeCAD</url>
   <icon>freecad/hexfill/resources/icons/HexFill.svg</icon>
 
   <content>

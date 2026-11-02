@@ -5,11 +5,13 @@ Open source FreeCAD workbench that fills a closed sketch or planar face with a p
 **Status:** early development (milestone M5 done). Not yet in the Addon Manager.
 
 ## Install (development)
-Link or clone this repository into your FreeCAD `Mod` folder, e.g. on Linux:
+Not yet in the Addon Manager catalog. Clone the repository into your FreeCAD `Mod` folder (FreeCAD 1.1 on Linux shown; 1.0 uses `v1-0`):
 
-    ln -s "$PWD" ~/.local/share/FreeCAD/Mod/HexFill
+    git clone https://github.com/twisted-builds-llc/hexagons_for_FreeCAD.git ~/.local/share/FreeCAD/v1-1/Mod/HexFill
 
-Restart FreeCAD and pick the **HexFill** workbench.
+Restart FreeCAD and pick the **HexFill** workbench. Update later with `git pull` in that folder.
+
+Alternatively, add `https://github.com/twisted-builds-llc/hexagons_for_FreeCAD` (branch `main`) under **Addon Manager → Preferences → Custom repositories**, then install HexFill from the Addon Manager.
 
 ## Use
 1. Select a closed sketch (holes allowed) or a planar face.
