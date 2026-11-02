@@ -48,8 +48,23 @@ def circumradius(cell_size):
     return cell_size / SQRT3
 
 
-def cell_area(cell_size):
-    return SQRT3 / 2.0 * cell_size * cell_size
+def cell_area(cell_size, corner_radius=0.0):
+    """Area of one hex opening, optionally with filleted corners."""
+    check_corner_radius(cell_size, corner_radius)
+    return (SQRT3 / 2.0 * cell_size * cell_size
+            - (2.0 * SQRT3 - math.pi) * corner_radius * corner_radius)
+
+
+def max_corner_radius(cell_size):
+    """Largest fillet radius; at this value the cell becomes a circle."""
+    return cell_size / 2.0
+
+
+def check_corner_radius(cell_size, corner_radius):
+    if corner_radius < 0:
+        raise ValueError("Corner radius must not be negative")
+    if corner_radius > max_corner_radius(cell_size) * (1 + 1e-9):
+        raise ValueError("Corner radius must be at most half the cell size")
 
 
 def open_area_ratio(cell_size, wall):
@@ -188,6 +203,47 @@ class HexGrid:
                 cells.append(Cell((i, j), self.center(i, j),
                                   [self.to_world(p) for p in hexagon], status))
         return cells
+
+
+# --- Corner fillets --------------------------------------------------------
+
+def rounded_outline(vertices, radius, eps=1e-9):
+    """Outline of a convex CCW polygon with every corner filleted.
+
+    Returns a closed sequence of ``("arc", start, mid, end)`` and
+    ``("line", start, end)`` segments. Lines shorter than ``eps`` are dropped,
+    so a hex filleted at its maximum radius comes back as six arcs.
+    """
+    n = len(vertices)
+    arcs = []
+    for k in range(n):
+        vx, vy = vertices[k]
+        a = _unit(vertices[k - 1][0] - vx, vertices[k - 1][1] - vy)
+        b = _unit(vertices[(k + 1) % n][0] - vx, vertices[(k + 1) % n][1] - vy)
+        half = math.acos(max(-1.0, min(1.0, a[0] * b[0] + a[1] * b[1]))) / 2.0
+        tangent = radius / math.tan(half)
+        for nb in (vertices[k - 1], vertices[(k + 1) % n]):
+            if tangent > math.dist((vx, vy), nb) / 2.0 * (1 + 1e-9):
+                raise ValueError("Corner radius is too large for this polygon")
+        bis = _unit(a[0] + b[0], a[1] + b[1])
+        to_center = radius / math.sin(half)
+        start = (vx + a[0] * tangent, vy + a[1] * tangent)
+        end = (vx + b[0] * tangent, vy + b[1] * tangent)
+        mid = (vx + bis[0] * (to_center - radius), vy + bis[1] * (to_center - radius))
+        arcs.append(("arc", start, mid, end))
+
+    outline = []
+    for k, arc in enumerate(arcs):
+        outline.append(arc)
+        start, end = arc[3], arcs[(k + 1) % n][1]
+        if math.dist(start, end) > eps:
+            outline.append(("line", start, end))
+    return outline
+
+
+def _unit(x, y):
+    length = math.hypot(x, y)
+    return (x / length, y / length)
 
 
 # --- Geometry helpers -----------------------------------------------------

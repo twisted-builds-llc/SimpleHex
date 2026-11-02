@@ -241,6 +241,15 @@ The layout follows the FreeCAD Addon Academy's namespace-package convention. Con
 | M5 | Freeform faces | Projection mode | Texture on a gently curved B-spline face |
 | M6 | Release | package.xml, README, wiki page, catalog PR | Installable from the Addon Manager |
 
+### M0 findings (FreeCAD 1.1.3, 2026-11-02)
+FreeCAD 1.0 was not available to test; re-check these there.
+- **Pocket profile:** a PartDesign Pocket accepts a `HexFill` (Part::FeaturePython, Faces output) directly as its Profile, even when the HexFill sits outside the Body. A `PartDesign::SubShapeBinder` of the HexFill also works. (The GUI may still ask about out-of-scope links.)
+- **Body membership:** a `Part::FeaturePython` cannot be added to a Body ("object is not allowed").
+- **`PartDesign::FeatureSubtractivePython`** works: added to a Body it gets `BaseFeature` set automatically, becomes the Tip, and exposes `AddSubShape` and `Refine`. M3 can build on it.
+- **`makeOffset2D` with holes** is wrong (see §6.2); HexFill offsets each wire separately.
+- **Task panel transactions:** use `App.setActiveTransaction(name, True)` / `App.closeActiveTransaction(abort)`, and close the transaction *before* `resetEdit()`, which otherwise commits it.
+- **DXF export:** FreeCAD's exporter writes all-line wires as LWPOLYLINE but wires with arcs (rounded cells) as loose LINE/ARC entities. Contours are closed and free of duplicates (checked in tests).
+
 ## 10. Testing
 
 - **Unit (pytest, no FreeCAD):** pitch/row spacing, cell counts for known rectangles, rotation, open-area math, ClipMinArea thresholds on synthetic polygons.

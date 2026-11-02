@@ -8,6 +8,7 @@ from ..core import hexgrid
 
 ANCHORS = ("Centered", "BoundaryOrigin")
 OUTPUTS = ("Wires", "Faces", "Solid")
+EDGE_MODES = ("WholeOnly", "Clip", "ClipMinArea")
 
 # Chord tolerance used to turn curved boundaries into polylines, as a
 # fraction of the cell size. Kept cells may touch a curved boundary by at most
@@ -47,6 +48,15 @@ class HexFill:
             "Web thickness between neighbouring cells", 1.2)
         add("App::PropertyLength", "Margin", "Cells",
             "Solid border kept inside the boundary", 2.0)
+        add("App::PropertyLength", "CornerRadius", "Cells",
+            "Fillet radius for cell corners (at most CellSize / 2)", 0.0)
+        add("App::PropertyEnumeration", "EdgeMode", "Edges",
+            "WholeOnly keeps whole cells; Clip trims edge cells to the margin; "
+            "ClipMinArea also drops trimmed cells below MinCellFraction",
+            "WholeOnly", EDGE_MODES)
+        add("App::PropertyFloat", "MinCellFraction", "Edges",
+            "ClipMinArea: drop trimmed cells smaller than this fraction of a full cell",
+            0.35)
         add("App::PropertyEnumeration", "Orientation", "Grid",
             "Hex orientation", hexgrid.POINTY_TOP, hexgrid.ORIENTATIONS)
         add("App::PropertyAngle", "Angle", "Grid", "Rotates the whole grid", 0.0)
@@ -88,8 +98,13 @@ class HexFill:
         local.transformShape(placement.inverse().toMatrix())
 
         size, wall = obj.CellSize.Value, obj.Wall.Value
+        radius = obj.CornerRadius.Value
         if size <= 0:
             raise HexFillError("CellSize must be greater than zero")
+        try:
+            full_area = hexgrid.cell_area(size, radius)
+        except ValueError as e:
+            raise HexFillError(str(e))
 
         region = inset(local, obj.Margin.Value)
         deflection = max(1e-4, size * DEFLECTION_RATIO)
@@ -104,18 +119,32 @@ class HexFill:
         origin = (origin[0] + obj.OffsetX.Value, origin[1] + obj.OffsetY.Value)
 
         grid = hexgrid.HexGrid(size, wall, obj.Orientation, obj.Angle.Value, origin)
-        cells = [c for c in grid.fill(rings) if c.status == hexgrid.INSIDE]
+        # All cells are congruent: build one and place copies (shared geometry).
+        template = cell_face(grid.vertices(0, 0), radius)
+        x0, y0 = grid.center(0, 0)
+        cell_faces = []
+        straddling = []
+        for cell in grid.fill(rings):
+            face = template.translated(App.Vector(cell.center[0] - x0, cell.center[1] - y0, 0))
+            if cell.status == hexgrid.INSIDE:
+                cell_faces.append(face)
+            elif obj.EdgeMode != "WholeOnly":
+                straddling.append(face)
+        if straddling:
+            min_area = (full_area * obj.MinCellFraction
+                        if obj.EdgeMode == "ClipMinArea" else 1e-9)
+            cell_faces += clip_cells(straddling, region, min_area)
 
         # The feature's Placement owns the frame: FreeCAD would overwrite any
         # placement carried by the shape itself.
-        obj.Shape = build_output(cells, obj.Output, obj.Depth.Value, obj.Reversed)
+        obj.Shape = build_output(cell_faces, obj.Output, obj.Depth.Value, obj.Reversed)
         obj.Placement = placement
 
-        obj.CellCount = len(cells)
+        obj.CellCount = len(cell_faces)
         obj.Pitch = grid.pitch
         area = local.Area
-        obj.OpenAreaPercent = (100.0 * len(cells) * hexgrid.cell_area(size) / area
-                               if area > 0 else 0.0)
+        open_area = sum(f.Area for f in cell_faces)
+        obj.OpenAreaPercent = 100.0 * open_area / area if area > 0 else 0.0
 
 
 def source_region(source):
@@ -185,12 +214,28 @@ def inset(local_faces, margin):
     return result
 
 
-def build_output(cells, output, depth, reversed_):
-    wires = [Part.makePolygon([App.Vector(x, y, 0) for x, y in c.vertices + c.vertices[:1]])
-             for c in cells]
+def cell_face(vertices, radius):
+    """Planar face for one cell, with filleted corners when radius > 0."""
+    if radius <= 0:
+        pts = [App.Vector(x, y, 0) for x, y in vertices]
+        return Part.Face(Part.makePolygon(pts + pts[:1]))
+    edges = []
+    for seg in hexgrid.rounded_outline(vertices, radius):
+        pts = [App.Vector(x, y, 0) for x, y in seg[1:]]
+        geom = Part.Arc(*pts) if seg[0] == "arc" else Part.LineSegment(*pts)
+        edges.append(geom.toShape())
+    return Part.Face(Part.Wire(edges))
+
+
+def clip_cells(cells, region, min_area):
+    """Trim edge cells to the region; keep pieces of at least min_area."""
+    pieces = Part.makeCompound(cells).common(region)
+    return [f for f in pieces.Faces if f.Area >= min_area]
+
+
+def build_output(faces, output, depth, reversed_):
     if output == "Wires":
-        return Part.makeCompound(wires)
-    faces = [Part.Face(w) for w in wires]
+        return Part.makeCompound([w for f in faces for w in f.Wires])
     if output == "Faces":
         return Part.makeCompound(faces)
     if depth <= 0:

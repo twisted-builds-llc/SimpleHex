@@ -162,3 +162,55 @@ def test_ring_orientation_and_closing_point_do_not_matter():
 
 def test_empty_region():
     assert HexGrid(6, 1).fill([]) == []
+
+
+# --- Corner fillets -------------------------------------------------------
+
+def outline_polygon(outline, steps=200):
+    """Densify an outline into points (arcs through start/mid/end)."""
+    pts = []
+    for seg in outline:
+        if seg[0] == "line":
+            pts.append(seg[1])
+            continue
+        _, p, m, q = seg
+        # Circle through three points.
+        ax, ay = p; bx, by = m; cx, cy = q
+        d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+        ux = ((ax**2 + ay**2) * (by - cy) + (bx**2 + by**2) * (cy - ay) + (cx**2 + cy**2) * (ay - by)) / d
+        uy = ((ax**2 + ay**2) * (cx - bx) + (bx**2 + by**2) * (ax - cx) + (cx**2 + cy**2) * (bx - ax)) / d
+        r = math.hypot(ax - ux, ay - uy)
+        a0 = math.atan2(ay - uy, ax - ux)
+        a1 = math.atan2(cy - uy, cx - ux)
+        sweep = (a1 - a0) % (2 * math.pi)
+        pts += [(ux + r * math.cos(a0 + sweep * t / steps), uy + r * math.sin(a0 + sweep * t / steps))
+                for t in range(steps)]
+    return pts
+
+
+def shoelace(pts):
+    return 0.5 * sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1]))
+
+
+@pytest.mark.parametrize("radius", [0.5, 1.5, 2.9])
+def test_rounded_hex_area_matches_formula(radius):
+    g = HexGrid(6, 1, angle=20, origin=(3, 4))
+    outline = hg.rounded_outline(g.vertices(1, 1), radius)
+    assert [s[0] for s in outline] == ["arc", "line"] * 6
+    assert shoelace(outline_polygon(outline)) == pytest.approx(hg.cell_area(6, radius), rel=1e-4)
+
+
+def test_max_radius_gives_circle():
+    g = HexGrid(6, 1)
+    outline = hg.rounded_outline(g.vertices(0, 0), hg.max_corner_radius(6))
+    assert [s[0] for s in outline] == ["arc"] * 6
+    for pt in outline_polygon(outline, 10):
+        assert math.hypot(*pt) == pytest.approx(3)
+    assert hg.cell_area(6, 3) == pytest.approx(math.pi * 9)
+
+
+def test_corner_radius_limits():
+    with pytest.raises(ValueError):
+        hg.cell_area(6, 3.1)
+    with pytest.raises(ValueError):
+        hg.rounded_outline(HexGrid(6, 1).vertices(0, 0), 3.1)
