@@ -109,6 +109,32 @@ def build_cylinder_texture(doc):
     return body, texture
 
 
+def build_freeform_texture(doc):
+    """Gently domed B-spline lid (100 x 80) with a hex recess texture on top."""
+    pts = [[V(x, y, 10 + 4 * math.sin(math.pi * x / 100) * math.sin(math.pi * y / 80))
+            for y in range(0, 81, 10)] for x in range(0, 101, 10)]
+    surface = Part.BSplineSurface()
+    surface.interpolate(pts)
+    lid = doc.addObject("Part::Feature", "DomedLid")
+    lid.Shape = surface.toShape().extrude(V(0, 0, -6))
+    top = next(i for i, f in enumerate(lid.Shape.Faces)
+               if isinstance(f.Surface, Part.BSplineSurface) and f.CenterOfMass.z > 9)
+
+    body = doc.addObject("PartDesign::Body", "Body")
+    body.BaseFeature = lid
+    doc.recompute()
+    texture = make_body_feature(body, (lid, ["Face{}".format(top + 1)]), HexSurfaceCut)
+    texture.Label = "HexTexture"
+    texture.CellSize = 6
+    texture.Wall = 1.4
+    texture.Margin = 5
+    texture.CornerRadius = 0.6
+    texture.Depth = 0.8
+    lid.Visibility = False
+    doc.recompute()
+    return body, texture
+
+
 def main():
     if not App.GuiUp:
         App.Console.PrintWarning("Run with the GUI so objects get view providers.\n")
@@ -125,6 +151,11 @@ def main():
     doc = App.newDocument("cylinder_texture")
     build_cylinder_texture(doc)
     doc.saveAs(os.path.join(HERE, "cylinder_texture.FCStd"))
+    App.closeDocument(doc.Name)
+
+    doc = App.newDocument("freeform_texture")
+    build_freeform_texture(doc)
+    doc.saveAs(os.path.join(HERE, "freeform_texture.FCStd"))
     App.closeDocument(doc.Name)
 
 

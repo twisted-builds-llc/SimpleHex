@@ -477,6 +477,111 @@ def test_surface_body_features_roundtrip():
     App.closeDocument(doc.Name)
 
 
+def dome_feature(doc, height=3.0):
+    """100 x 80 block, 15 thick, whose top is a gentle B-spline dome."""
+    pts = [[App.Vector(x, y, 10 + height * math.sin(math.pi * x / 100) * math.sin(math.pi * y / 80))
+            for y in range(0, 81, 10)] for x in range(0, 101, 10)]
+    surface = Part.BSplineSurface()
+    surface.interpolate(pts)
+    dome = doc.addObject("Part::Feature", "Dome")
+    dome.Shape = surface.toShape().extrude(App.Vector(0, 0, -15))
+    return dome
+
+
+def is_dome_top(f):
+    return isinstance(f.Surface, Part.BSplineSurface) and f.CenterOfMass.z > 9
+
+
+def test_freeform_recess_emboss_through():
+    doc = App.newDocument("HexFreeform")
+    dome = dome_feature(doc)
+    hs = make_hexsurface(doc, (dome, [face_name(dome, is_dome_top)]))
+    hs.Depth = 1.0
+    doc.recompute()
+    assert hs.isValid(), hs.getStatusString()
+    n = hs.CellCount
+    assert n > 100 and math.isclose(hs.Pitch.Value, 7.2)
+    cell = hexgrid.cell_area(6)
+    # Depth is along the surface normal under each cell; slopes here are
+    # under 7 degrees, so volumes match area * depth within 2 %.
+    recessed = dome.Shape.cut(hs.Shape)
+    assert recessed.isValid() and len(recessed.Solids) == 1
+    assert math.isclose(dome.Shape.Volume - recessed.Volume, n * cell * 1.0, rel_tol=2e-2)
+    # Projected cells: every cell is the flat hex seen from above.
+    for tool in hs.Shape.Solids[:10]:
+        top = max(tool.Faces, key=lambda f: f.CenterOfMass.z)
+        assert math.isclose(top.BoundBox.XLength, 6.0, rel_tol=1e-6)
+
+    hs.Mode = "Emboss"
+    hs.Depth = 0.5
+    doc.recompute()
+    assert hs.isValid(), hs.getStatusString()
+    embossed = dome.Shape.fuse(hs.Shape)
+    assert embossed.isValid() and len(embossed.Solids) == 1
+    assert math.isclose(embossed.Volume - dome.Shape.Volume, n * cell * 0.5, rel_tol=2e-2)
+
+    hs.Mode = "Cut"
+    hs.Depth = 0
+    hs.CellSize = 10
+    hs.Wall = 3
+    doc.recompute()
+    assert hs.isValid(), hs.getStatusString()
+    through = dome.Shape.cut(hs.Shape)
+    assert through.isValid() and len(through.Solids) == 1
+    assert math.isclose(dome.Shape.Volume - through.Volume,
+                        hs.CellCount * hexgrid.cell_area(10) * 15, rel_tol=1e-6)
+    App.closeDocument(doc.Name)
+
+
+def test_freeform_sphere_cap_and_too_steep():
+    doc = App.newDocument("HexSphere")
+    cap = doc.addObject("Part::Feature", "Cap")
+    cap.Shape = Part.makeSphere(150).common(Part.makeBox(120, 120, 40, App.Vector(-60, -60, 120)))
+    top = face_name(cap, lambda f: isinstance(f.Surface, Part.Sphere))
+    hs = make_hexsurface(doc, (cap, [top]))
+    hs.Depth = 0.8
+    hs.EdgeMode = "ClipMinArea"
+    doc.recompute()
+    assert hs.isValid(), hs.getStatusString()
+    cut = cap.Shape.cut(hs.Shape)
+    assert cut.isValid() and len(cut.Solids) == 1 and cut.Volume < cap.Shape.Volume
+
+    dome = doc.addObject("Part::Feature", "Hemisphere")
+    dome.Shape = Part.makeSphere(30).common(Part.makeBox(80, 80, 40, App.Vector(-40, -40, 0)))
+    steep = make_hexsurface(doc, (dome, [face_name(dome, lambda f: isinstance(f.Surface, Part.Sphere))]))
+    doc.recompute()
+    assert not steep.isValid() and "too curved" in steep.getStatusString()
+    App.closeDocument(doc.Name)
+
+
+def test_freeform_body_feature_roundtrip():
+    doc = App.newDocument("HexFreeformBody")
+    dome = dome_feature(doc)
+    body = doc.addObject("PartDesign::Body", "Body")
+    body.BaseFeature = dome
+    doc.recompute()
+    texture = make_body_feature(body, (dome, [face_name(dome, is_dome_top)]), HexSurfaceCut)
+    texture.Depth = 0.6
+    texture.CornerRadius = 0.8
+    doc.recompute()
+    assert texture.isValid(), texture.getStatusString()
+    assert body.Tip == texture and len(texture.Shape.Solids) == 1
+    expected = texture.CellCount * hexgrid.cell_area(6, 0.8) * 0.6
+    assert math.isclose(dome.Shape.Volume - texture.Shape.Volume, expected, rel_tol=2e-2)
+
+    path = os.path.join(tempfile.mkdtemp(), "freeform.FCStd")
+    count = texture.CellCount
+    doc.saveAs(path)
+    App.closeDocument(doc.Name)
+    doc = App.openDocument(path)
+    texture = doc.getObject("HexSurfaceCut")
+    texture.touch()
+    doc.recompute()
+    assert texture.isValid(), texture.getStatusString()
+    assert texture.CellCount == count
+    App.closeDocument(doc.Name)
+
+
 for _name, _test in list(globals().items()):
     if _name.startswith("test_"):
         _test()

@@ -8,15 +8,15 @@ from ..export import export_dxf
 from ..features.hexfill import make_hexfill
 from ..features.pd_features import (HexFillCut, HexFillPad, HexSurfaceCut, HexSurfacePad,
                                    make_body_feature)
-from ..features.surface import is_supported_face, make_hexsurface
+from ..features.surface import is_curved, make_hexsurface
 
 
 def _curved_face(sel):
-    """True when the selection is one cylindrical or conical face."""
+    """True when the selection is one curved (non-planar) face."""
     names = [n for n in sel.SubElementNames if n]
     if len(names) != 1 or not names[0].startswith("Face"):
         return False
-    return is_supported_face(sel.Object.Shape.getElement(names[0]))
+    return is_curved(sel.Object.Shape.getElement(names[0]))
 
 
 def _is_hexfill(obj):
@@ -30,8 +30,7 @@ class HexFillRegionCommand:
             "Pixmap": icon("HexFill.svg"),
             "MenuText": "Hex Fill Region",
             "ToolTip": "Fill a closed sketch, wire, or planar face with a hex pattern. "
-                       "On a cylindrical or conical face, make hex cell solids to "
-                       "cut or emboss",
+                       "On a curved face, make hex cell solids to cut or emboss",
         }
 
     def IsActive(self):
@@ -118,11 +117,11 @@ COMMANDS = {
     "HexFill_Cut": BodyFeatureCommand(
         HexFillCut, HexSurfaceCut, "HexFillCut.svg", "Hex Fill Cut",
         "Cut a hex pattern into the Body (PartDesign feature). Works on sketches, "
-        "planar faces, and cylindrical or conical faces"),
+        "planar faces, and curved faces"),
     "HexFill_Pad": BodyFeatureCommand(
         HexFillPad, HexSurfacePad, "HexFillPad.svg", "Hex Fill Pad",
         "Raise a hex pattern on the Body (PartDesign feature). Works on sketches, "
-        "planar faces, and cylindrical or conical faces"),
+        "planar faces, and curved faces"),
     "HexFill_ExportDXF": ExportDxfCommand(),
 }
 

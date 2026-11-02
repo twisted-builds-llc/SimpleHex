@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Hex patterns on cylindrical and conical faces.
+"""Hex patterns on curved faces.
+
+Cylinders and cones are handled here; other curved faces (B-spline, sphere,
+...) are handed to ``projection``.
 
 The face is unrolled into a flat plane (see ``core.develop``), the flat
 pattern engine fills it, and each cell is mapped back as curves in the
@@ -37,15 +40,20 @@ def source_face(source):
     obj, subs = source
     subs = [s for s in subs if s]
     if len(subs) != 1:
-        raise HexFillError("Select exactly one cylindrical or conical face")
+        raise HexFillError("Select exactly one face")
     face = obj.Shape.getElement(subs[0])
     if face.ShapeType != "Face":
         raise HexFillError("Source must be a face")
     return face, obj.Shape
 
 
-def is_supported_face(face):
+def is_developable(face):
+    """Cylinders and cones unroll exactly; other faces use projection."""
     return isinstance(face.Surface, (Part.Cylinder, Part.Cone))
+
+
+def is_curved(face):
+    return not isinstance(face.Surface, Part.Plane)
 
 
 def development_for(face):
@@ -66,7 +74,7 @@ def is_full_wrap(face):
 
 # --- Unrolling --------------------------------------------------------------
 
-def _polygon_face(points):
+def polygon_face(points):
     pts = [App.Vector(x, y, 0) for x, y in points]
     clean = [p for i, p in enumerate(pts) if (p - pts[i - 1]).Length > 1e-9]
     return Part.Face(Part.makePolygon(clean + clean[:1]))
@@ -96,8 +104,8 @@ def developed_region(face, dev, deflection, wrap_width=None):
 
     def shifted(points):
         if wrap_width is None:
-            return [_polygon_face(points)]
-        return [_polygon_face([(x + k * wrap_width, y) for x, y in points])
+            return [polygon_face(points)]
+        return [polygon_face([(x + k * wrap_width, y) for x, y in points])
                 for k in (-1, 0, 1)]
 
     try:
@@ -248,6 +256,9 @@ def surface_tools(obj, solid, subtractive):
     Updates the result properties. Returns a list of solids.
     """
     face, _ = source_face(obj.Source)
+    if not is_developable(face):
+        from .projection import projection_tools
+        return projection_tools(obj, face, solid, subtractive)
     dev = development_for(face)
     surface = face.Surface
     size, wall = obj.CellSize.Value, obj.Wall.Value
@@ -363,7 +374,7 @@ def _rotation_sense(face):
 
 
 class HexSurface:
-    """Part feature: hex cell solids on a cylindrical or conical face."""
+    """Part feature: hex cell solids on a curved face."""
 
     def __init__(self, obj):
         obj.Proxy = self

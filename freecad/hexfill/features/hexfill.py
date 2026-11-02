@@ -242,7 +242,7 @@ def inset(local_faces, margin):
             if holes and piece.Faces:
                 piece = piece.cut(Part.makeCompound(holes))
             pieces.extend(piece.Faces)
-    except Part.OCCError as e:
+    except (Part.OCCError, ValueError) as e:
         raise HexFillError("Margin offset failed: {}".format(e))
     result = Part.makeCompound(pieces)
     if not result.Faces:

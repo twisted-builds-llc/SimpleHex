@@ -179,6 +179,27 @@ def main():
     assert vent.ViewObject.Proxy.getIcon().endswith("HexFillCut.svg")
     log("PASS Hex Fill Cut on a curved face")
 
+    # Freeform (B-spline) face: projection mode, same command
+    import math
+    pts = [[App.Vector(x, y, 10 + 3 * math.sin(math.pi * x / 100) * math.sin(math.pi * y / 80))
+            for y in range(0, 81, 20)] for x in range(0, 101, 20)]
+    bspline = Part.BSplineSurface()
+    bspline.interpolate(pts)
+    dome = doc.addObject("Part::Feature", "Dome")
+    dome.Shape = bspline.toShape().extrude(App.Vector(0, 0, -15))
+    top = next(i for i, f in enumerate(dome.Shape.Faces)
+               if isinstance(f.Surface, Part.BSplineSurface) and f.CenterOfMass.z > 9)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(dome, "Face{}".format(top + 1))
+    Gui.runCommand("HexFill_Region")
+    texture = doc.getObject("HexSurface001")
+    panel = active_panel()
+    assert panel.preview_key == "LivePreviewSurface"
+    panel.accept()
+    assert texture.isValid(), texture.getStatusString()
+    assert texture.CellCount > 50 and len(texture.Shape.Solids) == texture.CellCount
+    log("PASS Hex Pattern on a freeform face")
+
 
 try:
     main()

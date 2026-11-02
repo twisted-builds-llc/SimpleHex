@@ -99,7 +99,7 @@ class HexFillPad(HexFillBodyFeature):
 
 
 class HexSurfaceBodyFeature(HexFillBodyFeature):
-    """Pattern on a cylindrical or conical face of the Body."""
+    """Pattern on a curved face of the Body."""
 
     def add_properties(self, obj):
         add_pattern_properties(obj)

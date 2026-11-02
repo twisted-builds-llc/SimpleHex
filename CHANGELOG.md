@@ -13,3 +13,5 @@
 - Example: `examples/vent_cover.FCStd`.
 - Hex patterns on cylindrical and conical faces: Part **HexSurface** (cell solids to cut or emboss) and PartDesign **HexSurfaceCut** / **HexSurfacePad**, created by the same commands when a curved face is selected. Cells keep their true size (exact unrolling), walls follow the surface normal, full 360° cylinders wrap seamlessly with the pitch adjusted to a whole number of cells. Depth 0 cuts through the wall.
 - Example: `examples/cylinder_texture.FCStd`.
+- Freeform faces (B-spline, sphere, ...): projection mode. The flat pattern is projected onto the face along its middle normal; recess floors / emboss tops follow the tangent plane at each cell, offset by Depth along the surface normal. Faces turning more than 75° from the middle normal are refused.
+- Example: `examples/freeform_texture.FCStd`.
