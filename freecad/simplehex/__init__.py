@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""HexFill: parametric hexagon pattern workbench for FreeCAD.
+"""SimpleHex: parametric hexagon pattern workbench for FreeCAD.
 
 Kept free of FreeCAD imports so ``core`` can be tested without FreeCAD.
 """

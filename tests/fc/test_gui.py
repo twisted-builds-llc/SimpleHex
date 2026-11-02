@@ -29,23 +29,23 @@ def main():
     import FreeCAD as App
     import FreeCADGui as Gui
     import Part
-    import freecad.hexfill.init_gui  # noqa: F401  registers the workbench
-    from freecad.hexfill.gui.taskpanel import HexFillTaskPanel
+    import freecad.simplehex.init_gui  # noqa: F401  registers the workbench
+    from freecad.simplehex.gui.taskpanel import SimpleHexTaskPanel
 
     def active_panel():
         dialog = Gui.Control.activeDialog()
         assert dialog, "no task dialog open"
         import gc
         panels = [o for o in gc.get_objects()
-                  if isinstance(o, HexFillTaskPanel) and o not in seen]
+                  if isinstance(o, SimpleHexTaskPanel) and o not in seen]
         assert len(panels) == 1, panels
         seen.append(panels[0])
         return panels[0]
 
     seen = []
-    Gui.activateWorkbench("HexFillWorkbench")
+    Gui.activateWorkbench("SimpleHexWorkbench")
 
-    doc = App.newDocument("HexFillGui")
+    doc = App.newDocument("SimpleHexGui")
     sk = doc.addObject("Sketcher::SketchObject", "Region")
     pts = [App.Vector(0, 0, 0), App.Vector(120, 0, 0), App.Vector(120, 80, 0), App.Vector(0, 80, 0)]
     for a, b in zip(pts, pts[1:] + pts[:1]):
@@ -55,8 +55,8 @@ def main():
 
     # Create, preview, OK
     Gui.Selection.addSelection(sk)
-    Gui.runCommand("HexFill_Region")
-    obj = doc.getObject("HexFill")
+    Gui.runCommand("SimpleHex_Region")
+    obj = doc.getObject("SimpleHex")
     panel = active_panel()
     assert obj.CellCount == 140, obj.CellCount
     panel.edge_mode.setCurrentIndex(2)
@@ -92,7 +92,7 @@ def main():
     count = len(doc.Objects)
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(sk)
-    Gui.runCommand("HexFill_Region")
+    Gui.runCommand("SimpleHex_Region")
     assert len(doc.Objects) == count + 1
     active_panel().reject()
     assert len(doc.Objects) == count and sk.Visibility
@@ -110,8 +110,8 @@ def main():
     doc.recompute()
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(plate)
-    Gui.runCommand("HexFill_Cut")
-    cut = doc.getObject("HexFillCut")
+    Gui.runCommand("SimpleHex_Cut")
+    cut = doc.getObject("SimpleHexCut")
     panel = active_panel()
     assert not panel.has_output and "through all" in panel.depth_label.text()
     assert body.Tip == cut and cut.isValid(), cut.getStatusString()
@@ -119,7 +119,7 @@ def main():
     panel.accept()
     assert cut.isValid() and cut.CornerRadius.Value == 1.0
     assert cut.Shape.Volume < pad.Shape.Volume
-    assert cut.ViewObject.Proxy.getIcon().endswith("HexFillCut.svg")
+    assert cut.ViewObject.Proxy.getIcon().endswith("SimpleHexCut.svg")
     log("PASS Hex Fill Cut + OK")
 
     # Hex Fill Pad on a face, then Cancel: object gone, Tip restored
@@ -128,8 +128,8 @@ def main():
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(cut, "Face{}".format(top + 1))
     count = len(doc.Objects)
-    Gui.runCommand("HexFill_Pad")
-    assert len(doc.Objects) == count + 1 and body.Tip.Name == "HexFillPad"
+    Gui.runCommand("SimpleHex_Pad")
+    assert len(doc.Objects) == count + 1 and body.Tip.Name == "SimpleHexPad"
     active_panel().reject()
     assert len(doc.Objects) == count and body.Tip == cut
     log("PASS Hex Fill Pad + Cancel")
@@ -141,7 +141,7 @@ def main():
                  if isinstance(f.Surface, Part.Cylinder) and f.Surface.Radius > 24)
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(tube, "Face{}".format(outer + 1))
-    Gui.runCommand("HexFill_Region")
+    Gui.runCommand("SimpleHex_Region")
     surface = doc.getObject("HexSurface")
     panel = active_panel()
     assert panel.has_mode and not panel.has_output and not panel.has_reversed
@@ -169,14 +169,14 @@ def main():
                  if isinstance(f.Surface, Part.Cylinder) and f.Surface.Radius > 19)
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(ring_pad, "Face{}".format(outer + 1))
-    Gui.runCommand("HexFill_Cut")
+    Gui.runCommand("SimpleHex_Cut")
     vent = doc.getObject("HexSurfaceCut")
     panel = active_panel()
     assert vent is not None and body2.Tip == vent
     assert panel.depth_label.text() == "Depth (0 = through)"
     panel.accept()
     assert vent.isValid(), vent.getStatusString()
-    assert vent.ViewObject.Proxy.getIcon().endswith("HexFillCut.svg")
+    assert vent.ViewObject.Proxy.getIcon().endswith("SimpleHexCut.svg")
     log("PASS Hex Fill Cut on a curved face")
 
     # Freeform (B-spline) face: projection mode, same command
@@ -191,7 +191,7 @@ def main():
                if isinstance(f.Surface, Part.BSplineSurface) and f.CenterOfMass.z > 9)
     Gui.Selection.clearSelection()
     Gui.Selection.addSelection(dome, "Face{}".format(top + 1))
-    Gui.runCommand("HexFill_Region")
+    Gui.runCommand("SimpleHex_Region")
     texture = doc.getObject("HexSurface001")
     panel = active_panel()
     assert panel.preview_key == "LivePreviewSurface"

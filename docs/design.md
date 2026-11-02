@@ -1,16 +1,16 @@
-# HexFill — FreeCAD Hexagon Pattern Workbench
+# SimpleHex — FreeCAD Hexagon Pattern Workbench
 
 **Design Document v0.1**
 **Owner:** Dale / Twisted Builds LLC
 **Status:** Draft, pre-development
 **License:** LGPL-2.1-or-later (see §11)
-**Working name:** "HexFill" (placeholder; check for name collisions on GitHub and the FreeCAD Addon catalog before publishing)
+**Working name:** "SimpleHex" (placeholder; check for name collisions on GitHub and the FreeCAD Addon catalog before publishing)
 
 ---
 
 ## 1. Summary
 
-HexFill is an open source FreeCAD workbench that fills a user-chosen region with a parametric hexagon (honeycomb) pattern. The user selects a closed sketch (or a face), sets the hex size, wall thickness, margin and edge behavior, and gets a live, editable feature. Changing any value re-flows the pattern. The same engine also puts hex patterns on curved surfaces, either cut through or as a shallow texture.
+SimpleHex is an open source FreeCAD workbench that fills a user-chosen region with a parametric hexagon (honeycomb) pattern. The user selects a closed sketch (or a face), sets the hex size, wall thickness, margin and edge behavior, and gets a live, editable feature. Changing any value re-flows the pattern. The same engine also puts hex patterns on curved surfaces, either cut through or as a shallow texture.
 
 Target uses:
 - **3D printing:** lightweighting, vents, grilles, decorative infill panels
@@ -28,7 +28,7 @@ Existing options and their gaps:
 | PartDesign MultiTransform / LinearPattern | Manual hex patterning | Tedious. Doesn't clip to an arbitrary boundary. Slow with many instances. |
 | Curves WB "Map sketch on surface" + macro | Hexes on curved surfaces | Around 30 manual steps, plus cleanup of duplicate edges. Not parametric end-to-end. |
 
-HexFill's job is to make "pick region → set numbers → done" a single feature, on flat and curved geometry.
+SimpleHex's job is to make "pick region → set numbers → done" a single feature, on flat and curved geometry.
 
 ## 3. Goals and non-goals
 
@@ -50,9 +50,9 @@ HexFill's job is to make "pick region → set numbers → done" a single feature
 
 ### 4.1 Flat region (primary workflow)
 1. Draw a closed sketch for the region you want patterned, or select a planar face.
-2. Click **HexFill → Hex Fill Region**.
+2. Click **SimpleHex → Hex Fill Region**.
 3. In the task panel, set hex size, wall, margin, angle, edge mode, and output mode. The preview updates live.
-4. Click OK. A `HexFill` object appears in the tree, linked to the source.
+4. Click OK. A `SimpleHex` object appears in the tree, linked to the source.
 5. Use it:
    - **PartDesign:** as a subtractive feature (cuts through or to a depth) or as a profile for Pocket
    - **Part WB:** extrude it and Boolean-cut
@@ -60,7 +60,7 @@ HexFill's job is to make "pick region → set numbers → done" a single feature
 
 ### 4.2 Surface pattern
 1. Select a face (cylinder, cone, or later, freeform).
-2. Click **HexFill → Hex Pattern on Surface**.
+2. Click **SimpleHex → Hex Pattern on Surface**.
 3. Set the cell parameters plus **depth** and **mode**: cut through, recess (texture), or emboss.
 4. The result is a solid you can Boolean with the body, or a PartDesign feature.
 
@@ -161,8 +161,8 @@ Likely ship (c) first for freeform, since it's the most predictable.
 ## 7. FreeCAD integration
 
 ### 7.1 Objects
-- `HexFill` — `Part::FeaturePython` for general use (Part WB, export)
-- `HexFillCut` / `HexFillPad` — PartDesign subtractive/additive variants built on `PartDesign::FeatureSubtractivePython` / `PartDesign::FeatureAdditivePython`, so it sits in the Body tree like a normal Pocket/Pad (verify the API in M0)
+- `SimpleHex` — `Part::FeaturePython` for general use (Part WB, export)
+- `SimpleHexCut` / `SimpleHexPad` — PartDesign subtractive/additive variants built on `PartDesign::FeatureSubtractivePython` / `PartDesign::FeatureAdditivePython`, so it sits in the Body tree like a normal Pocket/Pad (verify the API in M0)
 - `HexSurface` — surface-pattern feature (Part and PartDesign variants)
 
 Each has a ViewProvider with an icon, double-click to reopen the task panel, and `claimChildren` for the source.
@@ -191,7 +191,7 @@ Each has a ViewProvider with an icon, double-click to reopen the task panel, and
 ## 8. Repository layout
 
 ```
-HexFill/
+SimpleHex/
 ├── package.xml                # Addon Manager metadata (required for catalog)
 ├── LICENSE                    # LGPL-2.1 full text
 ├── README.md                  # User-facing docs + screenshots/GIFs
@@ -200,14 +200,14 @@ HexFill/
 ├── docs/
 │   └── design.md              # this document
 ├── freecad/
-│   └── hexfill/
+│   └── simplehex/
 │       ├── __init__.py
 │       ├── init_gui.py        # Workbench registration (namespace-style workbench)
 │       ├── core/
 │       │   ├── hexgrid.py     # pure-Python grid math (no FreeCAD imports)
 │       │   └── units.py
 │       ├── features/
-│       │   ├── hexfill.py     # Part::FeaturePython
+│       │   ├── simplehex.py     # Part::FeaturePython
 │       │   ├── pd_features.py # PartDesign additive/subtractive
 │       │   └── surface.py
 │       ├── gui/
@@ -233,22 +233,22 @@ The layout follows the FreeCAD Addon Academy's namespace-package convention. Con
 | # | Milestone | Deliverable | Done when |
 |---|---|---|---|
 | M0 | Spike / API checks | Throwaway script | Confirmed: which output types PartDesign Pocket accepts as a profile; that `PartDesign::FeatureSubtractivePython` works in 1.0/1.1; that `makeOffset2D` handles sketches with holes |
-| M1 | Flat fill, WholeOnly | `hexgrid.py` + `HexFill` object, properties only | Fills an arbitrary closed sketch with holes; pytest passing |
+| M1 | Flat fill, WholeOnly | `hexgrid.py` + `SimpleHex` object, properties only | Fills an arbitrary closed sketch with holes; pytest passing |
 | M2 | Edge modes + polish | Clip, ClipMinArea, CornerRadius, task panel, icons | Task panel live preview; plasma example part produces clean DXF |
-| M3 | PartDesign features | `HexFillCut` / `HexFillPad` | Works as a native Body feature, survives save/reopen and upstream sketch edits |
+| M3 | PartDesign features | `SimpleHexCut` / `SimpleHexPad` | Works as a native Body feature, survives save/reopen and upstream sketch edits |
 | M4 | Cylinder / cone | `HexSurface` (developable) + `HexSurfaceCut` / `HexSurfacePad` | Hex vent around a tube, recess texture on a cylinder, seam pitch correction |
 | M5 | Freeform faces | Projection mode (`HexSurface` / `HexSurfaceCut` / `HexSurfacePad`) | Texture on a gently curved B-spline face |
 | M6 | Release | package.xml, README, wiki page, catalog PR | Installable from the Addon Manager |
 
 ### M0 findings (FreeCAD 1.1.3, 2026-11-02)
 FreeCAD 1.0 was not available to test; re-check these there.
-- **Pocket profile:** a PartDesign Pocket accepts a `HexFill` (Part::FeaturePython, Faces output) directly as its Profile, even when the HexFill sits outside the Body. A `PartDesign::SubShapeBinder` of the HexFill also works. (The GUI may still ask about out-of-scope links.)
+- **Pocket profile:** a PartDesign Pocket accepts a `SimpleHex` (Part::FeaturePython, Faces output) directly as its Profile, even when the SimpleHex sits outside the Body. A `PartDesign::SubShapeBinder` of the SimpleHex also works. (The GUI may still ask about out-of-scope links.)
 - **Body membership:** a `Part::FeaturePython` cannot be added to a Body ("object is not allowed").
 - **`PartDesign::FeatureSubtractivePython`** works: added to a Body it gets `BaseFeature` set automatically, becomes the Tip, and exposes `AddSubShape` and `Refine`. M3 can build on it.
-- **M3 conventions:** HexFillCut `Depth = 0` cuts through all on *both* sides of the sketch plane (the usual intent for vents; differs from Pocket's one-sided Through All). Face sources use the face's outward normal. A result with more than one solid is an error.
+- **M3 conventions:** SimpleHexCut `Depth = 0` cuts through all on *both* sides of the sketch plane (the usual intent for vents; differs from Pocket's one-sided Through All). Face sources use the face's outward normal. A result with more than one solid is an error.
 - **M4 findings:** Booleans on cylindrical faces are inherently slow in OCC (300 plain radial drill holes in a tube: 7.5 s vs 0.4 s in a plate; already multi-threaded). Mitigations used: canonical coaxial offset surfaces instead of `Part.OffsetSurface` (which also produced invalid faces on rotated cylinders), one template tool per whole cylinder cell placed by rotate/slide, exact rational pcurves for rounded corners on cylinders (halves Boolean time), and live preview off by default for curved faces. Cone full wraps cannot be made periodic (the unrolled sector is not translation-periodic), so the seam is a boundary. Cuts start above any material proud of the face (bounding-box clearance) so earlier embossing is cut cleanly.
 - **M5 findings:** shipped option (c), projection. Tools are prisms along the projection direction, trimmed per cell by a half-space at the tangent plane offset by Depth along the surface normal. Curved floors (offset or translated copies of the B-spline face) were 5-10x slower in OCC because near-parallel B-spline/B-spline intersections are expensive; planar floors differ from the true offset only by the curvature sag across one cell. Seam edges (spheres) are dropped from the projected outline. Faces turning more than 75 degrees from the middle normal are refused (projection would fold).
-- **`makeOffset2D` with holes** is wrong (see §6.2); HexFill offsets each wire separately.
+- **`makeOffset2D` with holes** is wrong (see §6.2); SimpleHex offsets each wire separately.
 - **Task panel transactions:** use `App.setActiveTransaction(name, True)` / `App.closeActiveTransaction(abort)`, and close the transaction *before* `resetEdit()`, which otherwise commits it.
 - **DXF export:** FreeCAD's exporter writes all-line wires as LWPOLYLINE but wires with arcs (rounded cells) as loose LINE/ARC entities. Contours are closed and free of duplicates (checked in tests).
 
@@ -267,8 +267,8 @@ FreeCAD 1.0 was not available to test; re-check these there.
 
 Rationale:
 - It matches FreeCAD itself and most of the addon ecosystem, which makes contributions and code reuse with other addons painless.
-- People can use HexFill freely, including on commercial parts, and the parts they design are theirs. The license covers the code, not the models made with it.
-- Anyone who distributes a modified HexFill has to share those changes, so improvements stay open. MIT wouldn't require that.
+- People can use SimpleHex freely, including on commercial parts, and the parts they design are theirs. The license covers the code, not the models made with it.
+- Anyone who distributes a modified SimpleHex has to share those changes, so improvements stay open. MIT wouldn't require that.
 - The prior-art Honeycomb macro is also LGPL-2.1, so borrowing ideas from it, or code with attribution, stays compatible.
 
 Alternatives:

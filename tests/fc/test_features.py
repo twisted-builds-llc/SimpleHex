@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Integration checks for the HexFill feature.
+"""Integration checks for the SimpleHex feature.
 
 Run headless from the repository root:
 
@@ -20,12 +20,12 @@ import freecad  # noqa: E402  FreeCAD's own namespace package
 
 freecad.__path__.append(os.path.join(ROOT, "freecad"))
 
-from freecad.hexfill.core import hexgrid  # noqa: E402
-from freecad.hexfill.export import export_dxf  # noqa: E402
-from freecad.hexfill.features.hexfill import inset, make_hexfill  # noqa: E402
-from freecad.hexfill.features.pd_features import (  # noqa: E402
-    HexFillCut, HexFillPad, HexSurfaceCut, HexSurfacePad, make_body_feature)
-from freecad.hexfill.features.surface import make_hexsurface  # noqa: E402
+from freecad.simplehex.core import hexgrid  # noqa: E402
+from freecad.simplehex.export import export_dxf  # noqa: E402
+from freecad.simplehex.features.simplehex import inset, make_simplehex  # noqa: E402
+from freecad.simplehex.features.pd_features import (  # noqa: E402
+    SimpleHexCut, SimpleHexPad, HexSurfaceCut, HexSurfacePad, make_body_feature)
+from freecad.simplehex.features.surface import make_hexsurface  # noqa: E402
 
 
 def rectangle_sketch(doc, w, h, hole_radius=0.0):
@@ -65,9 +65,9 @@ def test_inset_with_hole():
 
 
 def test_rectangle_with_hole_and_roundtrip():
-    doc = App.newDocument("HexFillTest")
+    doc = App.newDocument("SimpleHexTest")
     sk = rectangle_sketch(doc, 120, 80, hole_radius=15)
-    fill = make_hexfill(doc, (sk, []))
+    fill = make_simplehex(doc, (sk, []))
     doc.recompute()
 
     assert fill.isValid(), fill.getStatusString()
@@ -84,13 +84,13 @@ def test_rectangle_with_hole_and_roundtrip():
     assert len(fill.Shape.Solids) == fill.CellCount
     assert fill.Shape.isValid()
 
-    path = os.path.join(tempfile.mkdtemp(), "hexfill.FCStd")
+    path = os.path.join(tempfile.mkdtemp(), "simplehex.FCStd")
     count = fill.CellCount
     doc.saveAs(path)
     App.closeDocument(doc.Name)
 
     doc = App.openDocument(path)
-    fill = doc.getObject("HexFill")
+    fill = doc.getObject("SimpleHex")
     fill.touch()
     doc.recompute()
     assert fill.isValid(), fill.getStatusString()
@@ -99,19 +99,19 @@ def test_rectangle_with_hole_and_roundtrip():
 
 
 def test_open_wire_reports_error():
-    doc = App.newDocument("HexFillOpen")
+    doc = App.newDocument("SimpleHexOpen")
     sk = doc.addObject("Sketcher::SketchObject", "Open")
     sk.addGeometry(Part.LineSegment(App.Vector(0, 0, 0), App.Vector(10, 0, 0)))
-    fill = make_hexfill(doc, (sk, []))
+    fill = make_simplehex(doc, (sk, []))
     doc.recompute()
     assert not fill.isValid()
     App.closeDocument(doc.Name)
 
 
 def test_edge_modes_and_corner_radius():
-    doc = App.newDocument("HexFillEdges")
+    doc = App.newDocument("SimpleHexEdges")
     sk = rectangle_sketch(doc, 120, 80, hole_radius=15)
-    fill = make_hexfill(doc, (sk, []))
+    fill = make_simplehex(doc, (sk, []))
     full = hexgrid.cell_area(6.0)
 
     counts = {}
@@ -199,7 +199,7 @@ def check_dxf_contours(path):
 
 def test_plasma_example_dxf_export():
     doc = App.openDocument(os.path.join(ROOT, "examples", "plasma_panel.FCStd"))
-    fill = doc.getObject("HexFill")
+    fill = doc.getObject("SimpleHex")
     fill.touch()
     doc.recompute()
     assert fill.isValid(), fill.getStatusString()
@@ -227,10 +227,10 @@ def plate_body(doc, w=120, h=80, thickness=4, hole_radius=15):
 
 
 def test_body_cut_through_all_and_depth():
-    doc = App.newDocument("HexFillBodyCut")
+    doc = App.newDocument("SimpleHexBodyCut")
     body, sk, pad = plate_body(doc)
     plate = pad.Shape.Volume
-    cut = make_body_feature(body, (sk, []), HexFillCut)
+    cut = make_body_feature(body, (sk, []), SimpleHexCut)
     doc.recompute()
     assert cut.isValid(), cut.getStatusString()
     assert body.Tip == cut and cut.BaseFeature == pad
@@ -267,8 +267,8 @@ def test_body_cut_through_all_and_depth():
     doc.saveAs(path)
     App.closeDocument(doc.Name)
     doc = App.openDocument(path)
-    cut = doc.getObject("HexFillCut")
-    assert isinstance(cut.Proxy, HexFillCut)
+    cut = doc.getObject("SimpleHexCut")
+    assert isinstance(cut.Proxy, SimpleHexCut)
     cut.touch()
     doc.recompute()
     assert cut.isValid(), cut.getStatusString()
@@ -277,7 +277,7 @@ def test_body_cut_through_all_and_depth():
 
 
 def test_body_pad_embosses_cells():
-    doc = App.newDocument("HexFillBodyPad")
+    doc = App.newDocument("SimpleHexBodyPad")
     body, sk, pad = plate_body(doc, hole_radius=0)
     plate = pad.Shape.Volume
     # Emboss on the top face of the plate.
@@ -285,7 +285,7 @@ def test_body_pad_embosses_cells():
     faces = pad.Shape.Faces
     top = max(range(len(faces)), key=lambda i: faces[i].CenterOfMass.dot(normal))
     name = "Face{}".format(top + 1)
-    emboss = make_body_feature(body, (pad, [name]), HexFillPad)
+    emboss = make_body_feature(body, (pad, [name]), SimpleHexPad)
     emboss.Margin = 3
     emboss.Depth = 0.6
     doc.recompute()
@@ -309,11 +309,11 @@ def test_body_pad_embosses_cells():
 
 
 def test_body_feature_needs_base():
-    doc = App.newDocument("HexFillNoBase")
+    doc = App.newDocument("SimpleHexNoBase")
     body = doc.addObject("PartDesign::Body", "Body")
     sk = rectangle_sketch(doc, 50, 40)
     body.addObject(sk)
-    cut = make_body_feature(body, (sk, []), HexFillCut)
+    cut = make_body_feature(body, (sk, []), SimpleHexCut)
     doc.recompute()
     assert not cut.isValid()
     App.closeDocument(doc.Name)

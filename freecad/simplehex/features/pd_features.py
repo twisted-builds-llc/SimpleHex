@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""PartDesign HexFillCut / HexFillPad: hex patterns as native Body features."""
+"""PartDesign SimpleHexCut / SimpleHexPad: hex patterns as native Body features."""
 
 import FreeCAD as App
 import Part
 
-from .hexfill import HexFillError, add_pattern_properties, add_property, compute_pattern
+from .simplehex import SimpleHexError, add_pattern_properties, add_property, compute_pattern
 from .surface import surface_tools
 
 V = App.Vector
 
 
-class HexFillBodyFeature:
+class SimpleHexBodyFeature:
     """Common base; subclasses set ``subtractive`` and ``type_id``."""
 
     subtractive = True
@@ -24,9 +24,9 @@ class HexFillBodyFeature:
         add_pattern_properties(obj)
         doc = ("Cut depth into the material; 0 cuts through all, both sides"
                if self.subtractive else "Height of the raised cells")
-        add_property(obj, "App::PropertyLength", "Depth", "HexFill", doc,
+        add_property(obj, "App::PropertyLength", "Depth", "SimpleHex", doc,
                      0.0 if self.subtractive else 1.0)
-        add_property(obj, "App::PropertyBool", "Reversed", "HexFill",
+        add_property(obj, "App::PropertyBool", "Reversed", "SimpleHex",
                      "Flip the direction relative to the sketch normal", False)
 
     def onDocumentRestored(self, obj):
@@ -44,17 +44,17 @@ class HexFillBodyFeature:
     def execute(self, obj):
         base = obj.BaseFeature.Shape if obj.BaseFeature else Part.Shape()
         if base.isNull() or not base.Solids:
-            raise HexFillError("Needs a solid to work on: add it after a Pad or other "
+            raise SimpleHexError("Needs a solid to work on: add it after a Pad or other "
                                "feature in the Body")
         tool = self.make_tool(obj, base)
         if not tool.Solids:
-            raise HexFillError("No cells fit in the region")
+            raise SimpleHexError("No cells fit in the region")
 
         result = base.cut(tool) if self.subtractive else base.fuse(tool)
         if obj.Refine:
             result = result.removeSplitter()
         if len(result.Solids) != 1:
-            raise HexFillError(
+            raise SimpleHexError(
                 "Result has {} solids; a Body needs exactly one. "
                 "Check Depth, Reversed and the edge mode.".format(len(result.Solids)))
 
@@ -80,7 +80,7 @@ class HexFillBodyFeature:
             length = box.DiagonalLength + (box.Center - placement.Base).Length + 1.0
             return -length, 2.0 * length
         if depth <= 0:
-            raise HexFillError("Depth must be greater than zero")
+            raise SimpleHexError("Depth must be greater than zero")
         # Cuts go into the material (against the sketch normal), pads out of it.
         direction = -1.0 if self.subtractive else 1.0
         if obj.Reversed:
@@ -88,24 +88,24 @@ class HexFillBodyFeature:
         return 0.0, direction * depth
 
 
-class HexFillCut(HexFillBodyFeature):
+class SimpleHexCut(SimpleHexBodyFeature):
     subtractive = True
     type_id = "PartDesign::FeatureSubtractivePython"
 
 
-class HexFillPad(HexFillBodyFeature):
+class SimpleHexPad(SimpleHexBodyFeature):
     subtractive = False
     type_id = "PartDesign::FeatureAdditivePython"
 
 
-class HexSurfaceBodyFeature(HexFillBodyFeature):
+class HexSurfaceBodyFeature(SimpleHexBodyFeature):
     """Pattern on a curved face of the Body."""
 
     def add_properties(self, obj):
         add_pattern_properties(obj)
         doc = ("Depth along the surface normal; 0 cuts through the wall"
                if self.subtractive else "Height of the raised cells")
-        add_property(obj, "App::PropertyLength", "Depth", "HexFill", doc,
+        add_property(obj, "App::PropertyLength", "Depth", "SimpleHex", doc,
                      0.0 if self.subtractive else 1.0)
 
     def make_tool(self, obj, base):
@@ -123,11 +123,11 @@ class HexSurfacePad(HexSurfaceBodyFeature):
 
 
 def make_body_feature(body, source, feature_class):
-    """Add a HexFillCut or HexFillPad after the Body's Tip."""
+    """Add a SimpleHexCut or SimpleHexPad after the Body's Tip."""
     obj = body.newObject(feature_class.type_id, feature_class.__name__)
     feature_class(obj)
     obj.Source = source
     if App.GuiUp:
-        from ..gui.viewproviders import ViewProviderHexFill
-        ViewProviderHexFill(obj.ViewObject)
+        from ..gui.viewproviders import ViewProviderSimpleHex
+        ViewProviderSimpleHex(obj.ViewObject)
     return obj

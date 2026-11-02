@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Task panel for creating and editing HexFill objects.
+"""Task panel for creating and editing SimpleHex objects.
 
 Edits are written straight to the object's properties inside the application's
 active transaction (opened by the create command or by setEdit): OK commits
@@ -12,10 +12,10 @@ from PySide import QtCore, QtGui
 
 from .. import icon
 from ..core import hexgrid
-from ..features.hexfill import ANCHORS, EDGE_MODES, OUTPUTS
+from ..features.simplehex import ANCHORS, EDGE_MODES, OUTPUTS
 from ..features.surface import MODES
 
-PARAMS = App.ParamGet("User parameter:BaseApp/Preferences/Mod/HexFill")
+PARAMS = App.ParamGet("User parameter:BaseApp/Preferences/Mod/SimpleHex")
 
 SIZING_MODES = ("Flat-to-flat + wall", "Corner-to-corner + wall", "Pitch + open area")
 
@@ -34,7 +34,7 @@ def _combo(items):
     return combo
 
 
-class HexFillTaskPanel:
+class SimpleHexTaskPanel:
     def __init__(self, obj, creating=False):
         self.obj = obj
         self.creating = creating
@@ -56,8 +56,8 @@ class HexFillTaskPanel:
 
     def _build_form(self):
         form = QtGui.QWidget()
-        form.setWindowTitle("Hex Fill")
-        form.setWindowIcon(QtGui.QIcon(icon("HexFill.svg")))
+        form.setWindowTitle("SimpleHex")
+        form.setWindowIcon(QtGui.QIcon(icon("SimpleHex.svg")))
         layout = QtGui.QFormLayout(form)
 
         source = self.obj.Source

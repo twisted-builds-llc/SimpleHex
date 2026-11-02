@@ -21,7 +21,7 @@ import math
 import FreeCAD as App
 import Part
 
-from .hexfill import HexFillError, pattern_cells, set_results
+from .simplehex import SimpleHexError, pattern_cells, set_results
 
 MAX_TILT_DEG = 75.0
 # Tools start/stop this far beyond the faces they meet.
@@ -53,7 +53,7 @@ def check_tilt(face, direction):
             if face.isPartOfDomain(u, v):
                 worst = min(worst, face.normalAt(u, v).dot(direction))
     if worst < limit:
-        raise HexFillError(
+        raise SimpleHexError(
             "Face is too curved to project onto: it turns {:.0f} degrees from its "
             "middle (limit {:.0f})".format(math.degrees(math.acos(max(-1.0, worst))),
                                           MAX_TILT_DEG))
@@ -75,7 +75,7 @@ def projected_region(local_face, deflection):
         if len(edges) < len(wire.Edges):
             wire = Part.Wire(Part.__sortEdges__(edges))
             if not wire.isClosed():
-                raise HexFillError("Face wraps around; it cannot be projected")
+                raise SimpleHexError("Face wraps around; it cannot be projected")
         return [(p.x, p.y) for p in wire.discretize(Deflection=deflection)]
 
     try:
@@ -84,9 +84,9 @@ def projected_region(local_face, deflection):
                  if not w.isSame(local_face.OuterWire)]
         region = outer.cut(Part.makeCompound(holes)) if holes else outer
     except Part.OCCError as e:
-        raise HexFillError("Could not project the face outline: {}".format(e))
+        raise SimpleHexError("Could not project the face outline: {}".format(e))
     if not region.isValid():
-        raise HexFillError("The face outline overlaps itself when projected")
+        raise SimpleHexError("The face outline overlaps itself when projected")
     return Part.makeCompound(region.Faces)
 
 
@@ -113,11 +113,11 @@ def projection_tools(obj, face, solid, subtractive):
 
     if subtractive and depth <= 0:
         if solid is None:
-            raise HexFillError("Depth 0 (through) needs the solid the face belongs to")
+            raise SimpleHexError("Depth 0 (through) needs the solid the face belongs to")
         tools = [f.translated(Z * bottom).extrude(Z * (top - bottom)) for f in faces]
     else:
         if depth <= 0:
-            raise HexFillError("Depth must be greater than zero")
+            raise SimpleHexError("Depth must be greater than zero")
         reach = (grid.pitch + depth) * 4.0 + (top - bottom)
         tools = []
         for f in faces:
@@ -137,7 +137,7 @@ def projection_tools(obj, face, solid, subtractive):
             try:
                 tools.append(prism.common(bound))
             except Part.OCCError as e:
-                raise HexFillError("Could not shape a cell: {}".format(e))
+                raise SimpleHexError("Could not shape a cell: {}".format(e))
 
     shape = Part.makeCompound(tools)
     shape.transformShape(placement.toMatrix())

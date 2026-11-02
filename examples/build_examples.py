@@ -22,9 +22,9 @@ import freecad  # noqa: E402  FreeCAD's own namespace package
 if os.path.join(ROOT, "freecad") not in freecad.__path__:
     freecad.__path__.append(os.path.join(ROOT, "freecad"))
 
-from freecad.hexfill.features.hexfill import make_hexfill  # noqa: E402
-from freecad.hexfill.features.pd_features import (  # noqa: E402
-    HexFillCut, HexSurfaceCut, make_body_feature)
+from freecad.simplehex.features.simplehex import make_simplehex  # noqa: E402
+from freecad.simplehex.features.pd_features import (  # noqa: E402
+    SimpleHexCut, HexSurfaceCut, make_body_feature)
 
 V = App.Vector
 
@@ -39,8 +39,8 @@ def build_plasma_panel(doc):
         sk.addGeometry(Part.Circle(V(x, y, 0), V(0, 0, 1), 3.25))
     sk.addGeometry(Part.Circle(V(100, 60, 0), V(0, 0, 1), 20))
 
-    fill = make_hexfill(doc, (sk, []))
-    fill.Label = "PlasmaHexFill"
+    fill = make_simplehex(doc, (sk, []))
+    fill.Label = "PlasmaSimpleHex"
     fill.CellSize = 10
     fill.Wall = 3
     fill.Margin = 6
@@ -72,7 +72,7 @@ def build_vent_cover(doc):
     pad.Length = 3
     doc.recompute()
 
-    cut = make_body_feature(body, (sk, []), HexFillCut)
+    cut = make_body_feature(body, (sk, []), SimpleHexCut)
     cut.CellSize = 7
     cut.Wall = 1.6
     cut.Margin = 10

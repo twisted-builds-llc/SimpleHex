@@ -4,20 +4,20 @@ import FreeCADGui as Gui
 from . import icon
 
 
-class HexFillWorkbench(Gui.Workbench):
-    MenuText = "HexFill"
+class SimpleHexWorkbench(Gui.Workbench):
+    MenuText = "SimpleHex"
     ToolTip = "Parametric hexagon patterns"
-    Icon = icon("HexFill.svg")
+    Icon = icon("SimpleHex.svg")
 
     def Initialize(self):
         from .gui import commands
 
         names = list(commands.COMMANDS)
-        self.appendToolbar("HexFill", names)
-        self.appendMenu("HexFill", names)
+        self.appendToolbar("SimpleHex", names)
+        self.appendMenu("SimpleHex", names)
 
     def GetClassName(self):
         return "Gui::PythonWorkbench"
 
 
-Gui.addWorkbench(HexFillWorkbench())
+Gui.addWorkbench(SimpleHexWorkbench())

@@ -3,8 +3,8 @@ import math
 
 import pytest
 
-from freecad.hexfill.core import hexgrid as hg
-from freecad.hexfill.core.hexgrid import HexGrid, INSIDE, STRADDLE
+from freecad.simplehex.core import hexgrid as hg
+from freecad.simplehex.core.hexgrid import HexGrid, INSIDE, STRADDLE
 
 
 # --- Oracles --------------------------------------------------------------

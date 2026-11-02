@@ -1,11 +1,11 @@
-# HexFill
+# SimpleHex
 
 FreeCAD workbench that fills closed planar regions with parametric hexagon patterns.
 Design document: `docs/design.md` (milestones in §9).
 
 ## Rules
 - Target FreeCAD 1.0 and 1.1. Python 3.8+ syntax only.
-- `freecad/hexfill/core/` must not import FreeCAD, Part, or PySide.
+- `freecad/simplehex/core/` must not import FreeCAD, Part, or PySide.
 - Qt only via FreeCAD's shim: `from PySide import QtCore, QtGui`.
 - Every source file starts with `# SPDX-License-Identifier: LGPL-2.1-or-later`.
 - Run `.venv/bin/pytest` before committing (create with `python3 -m venv .venv && .venv/bin/pip install pytest`).

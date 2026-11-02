@@ -3,8 +3,8 @@ import math
 
 import pytest
 
-from freecad.hexfill.core import hexgrid as hg
-from freecad.hexfill.core.develop import (
+from freecad.simplehex.core import hexgrid as hg
+from freecad.simplehex.core.develop import (
     ConeDevelopment, CylinderDevelopment, lattice_period, unwrap_angles, wrap_pitch)
 
 

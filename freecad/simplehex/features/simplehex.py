@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""HexFill Part::FeaturePython: fills a closed planar region with hex cells."""
+"""SimpleHex Part::FeaturePython: fills a closed planar region with hex cells."""
 
 import FreeCAD as App
 import Part
@@ -16,7 +16,7 @@ EDGE_MODES = ("WholeOnly", "Clip", "ClipMinArea")
 DEFLECTION_RATIO = 0.002
 
 
-class HexFillError(Exception):
+class SimpleHexError(Exception):
     pass
 
 
@@ -36,7 +36,7 @@ def add_property(obj, kind, name, group, doc, value=None, enum=None, read_only=F
 def add_pattern_properties(obj):
     """Properties shared by every feature that generates a hex pattern."""
     add = lambda *a, **k: add_property(obj, *a, **k)  # noqa: E731
-    add("App::PropertyLinkSub", "Source", "HexFill",
+    add("App::PropertyLinkSub", "Source", "SimpleHex",
         "Closed sketch, wire, or planar face to fill")
     add("App::PropertyLength", "CellSize", "Cells",
         "Hex opening, flat-to-flat", 6.0)
@@ -104,11 +104,11 @@ def pattern_cells(obj, local, origin, cell_size=None, keep=None):
     size = obj.CellSize.Value if cell_size is None else cell_size
     wall, radius = obj.Wall.Value, obj.CornerRadius.Value
     if size <= 0:
-        raise HexFillError("CellSize must be greater than zero")
+        raise SimpleHexError("CellSize must be greater than zero")
     try:
         full_area = hexgrid.cell_area(size, radius)
     except ValueError as e:
-        raise HexFillError(str(e))
+        raise SimpleHexError(str(e))
 
     region = inset(local, obj.Margin.Value)
     deflection = max(1e-4, size * DEFLECTION_RATIO)
@@ -144,7 +144,7 @@ def set_results(obj, cell_faces, pitch_value, region_area):
     obj.OpenAreaPercent = 100.0 * open_area / region_area if region_area > 0 else 0.0
 
 
-class HexFill:
+class SimpleHex:
     def __init__(self, obj):
         obj.Proxy = self
         self.add_properties(obj)
@@ -188,32 +188,32 @@ def source_region(source):
     when that frame is the source's own (so BoundaryOrigin is meaningful).
     """
     if not source:
-        raise HexFillError("No Source selected")
+        raise SimpleHexError("No Source selected")
     obj, subs = source
     subs = [s for s in subs if s]
     shape = getattr(obj, "Shape", None)
     if shape is None or shape.isNull():
-        raise HexFillError("Source {} has no shape".format(obj.Label))
+        raise SimpleHexError("Source {} has no shape".format(obj.Label))
 
     if subs:
         elements = [obj.Shape.getElement(s) for s in subs]
         if not all(e.ShapeType == "Face" for e in elements):
-            raise HexFillError("Only faces can be selected as sub-elements")
+            raise SimpleHexError("Only faces can be selected as sub-elements")
         faces = Part.makeCompound(elements)
     elif obj.Shape.Faces:
         faces = Part.makeCompound(obj.Shape.Faces)
     else:
         wires = obj.Shape.Wires
         if not wires or not all(w.isClosed() for w in wires):
-            raise HexFillError("Source must contain closed wires or faces")
+            raise SimpleHexError("Source must contain closed wires or faces")
         try:
             faces = Part.makeFace(wires, "Part::FaceMakerBullseye")
         except Part.OCCError as e:
-            raise HexFillError("Could not build a face from the source wires: {}".format(e))
+            raise SimpleHexError("Could not build a face from the source wires: {}".format(e))
 
     plane = faces.findPlane()
     if plane is None:
-        raise HexFillError("Source is not planar")
+        raise SimpleHexError("Source is not planar")
 
     if obj.isDerivedFrom("Sketcher::SketchObject"):
         return faces, obj.Placement, True
@@ -243,10 +243,10 @@ def inset(local_faces, margin):
                 piece = piece.cut(Part.makeCompound(holes))
             pieces.extend(piece.Faces)
     except (Part.OCCError, ValueError) as e:
-        raise HexFillError("Margin offset failed: {}".format(e))
+        raise SimpleHexError("Margin offset failed: {}".format(e))
     result = Part.makeCompound(pieces)
     if not result.Faces:
-        raise HexFillError("Margin is too large for this region")
+        raise SimpleHexError("Margin is too large for this region")
     return result
 
 
@@ -275,16 +275,16 @@ def build_output(faces, output, depth, reversed_):
     if output == "Faces":
         return Part.makeCompound(faces)
     if depth <= 0:
-        raise HexFillError("Solid output needs a Depth greater than zero")
+        raise SimpleHexError("Solid output needs a Depth greater than zero")
     direction = App.Vector(0, 0, -depth if reversed_ else depth)
     return Part.makeCompound([f.extrude(direction) for f in faces])
 
 
-def make_hexfill(doc, source):
-    obj = doc.addObject("Part::FeaturePython", "HexFill")
-    HexFill(obj)
+def make_simplehex(doc, source):
+    obj = doc.addObject("Part::FeaturePython", "SimpleHex")
+    SimpleHex(obj)
     obj.Source = source
     if App.GuiUp:
-        from ..gui.viewproviders import ViewProviderHexFill
-        ViewProviderHexFill(obj.ViewObject)
+        from ..gui.viewproviders import ViewProviderSimpleHex
+        ViewProviderSimpleHex(obj.ViewObject)
     return obj

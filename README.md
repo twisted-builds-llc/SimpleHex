@@ -1,4 +1,4 @@
-# HexFill for FreeCAD
+# SimpleHex for FreeCAD
 
 Open source FreeCAD workbench that fills a closed sketch or planar face with a parametric hexagon (honeycomb) pattern. Useful for 3D-print lightweighting, vents and grilles, and laser/plasma sheet parts.
 
@@ -7,17 +7,17 @@ Open source FreeCAD workbench that fills a closed sketch or planar face with a p
 ## Install (development)
 Not yet in the Addon Manager catalog. Clone the repository into your FreeCAD `Mod` folder (FreeCAD 1.1 on Linux shown; 1.0 uses `v1-0`):
 
-    git clone https://github.com/twisted-builds-llc/hexagons_for_FreeCAD.git ~/.local/share/FreeCAD/v1-1/Mod/HexFill
+    git clone https://github.com/twisted-builds-llc/hexagons_for_FreeCAD.git ~/.local/share/FreeCAD/v1-1/Mod/SimpleHex
 
-Restart FreeCAD and pick the **HexFill** workbench. Update later with `git pull` in that folder.
+Restart FreeCAD and pick the **SimpleHex** workbench. Update later with `git pull` in that folder.
 
-Alternatively, add `https://github.com/twisted-builds-llc/hexagons_for_FreeCAD` (branch `main`) under **Addon Manager → Preferences → Custom repositories**, then install HexFill from the Addon Manager.
+Alternatively, add `https://github.com/twisted-builds-llc/hexagons_for_FreeCAD` (branch `main`) under **Addon Manager → Preferences → Custom repositories**, then install SimpleHex from the Addon Manager.
 
 ## Use
 1. Select a closed sketch (holes allowed) or a planar face.
-2. Click **HexFill → Hex Fill Region**.
+2. Click **SimpleHex → Hex Fill Region**.
 3. Set cell size, wall, margin, corner radius, angle, edge mode and output in the task panel. The preview updates live. Double-click the object later to edit it.
-4. For laser/plasma, select the HexFill and use **HexFill → Export to DXF**. The source outline is exported with it.
+4. For laser/plasma, select the SimpleHex and use **SimpleHex → Export to DXF**. The source outline is exported with it.
 
 Edge modes: **WholeOnly** keeps only complete cells (no slivers), **Clip** trims edge cells to the margin, **ClipMinArea** trims but drops pieces smaller than `MinCellFraction` of a cell.
 

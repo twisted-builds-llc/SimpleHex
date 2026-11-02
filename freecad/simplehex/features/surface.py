@@ -21,7 +21,7 @@ import FreeCAD as App
 import Part
 
 from ..core import develop, hexgrid
-from .hexfill import (HexFillError, add_pattern_properties, add_property, pattern_cells,
+from .simplehex import (SimpleHexError, add_pattern_properties, add_property, pattern_cells,
                       set_results)
 
 MODES = ("Cut", "Emboss")
@@ -36,14 +36,14 @@ EDGE_SAMPLES = 16
 def source_face(source):
     """Return ``(face, solid)`` for a Source link naming one face."""
     if not source:
-        raise HexFillError("No Source selected")
+        raise SimpleHexError("No Source selected")
     obj, subs = source
     subs = [s for s in subs if s]
     if len(subs) != 1:
-        raise HexFillError("Select exactly one face")
+        raise SimpleHexError("Select exactly one face")
     face = obj.Shape.getElement(subs[0])
     if face.ShapeType != "Face":
-        raise HexFillError("Source must be a face")
+        raise SimpleHexError("Source must be a face")
     return face, obj.Shape
 
 
@@ -63,7 +63,7 @@ def development_for(face):
     if isinstance(surface, Part.Cone):
         u0, u1, _, _ = face.ParameterRange
         return develop.ConeDevelopment(surface.Radius, surface.SemiAngle, (u0 + u1) / 2.0)
-    raise HexFillError("Only cylindrical and conical faces are supported "
+    raise SimpleHexError("Only cylindrical and conical faces are supported "
                        "(got {})".format(type(surface).__name__))
 
 
@@ -115,7 +115,7 @@ def developed_region(face, dev, deflection, wrap_width=None):
         if hole_faces:
             region = region.cut(Part.makeCompound(hole_faces))
     except Part.OCCError as e:
-        raise HexFillError("Could not unroll the face: {}".format(e))
+        raise SimpleHexError("Could not unroll the face: {}".format(e))
     return Part.makeCompound(region.Faces), x0
 
 
@@ -244,7 +244,7 @@ def through_depth(face, solid, reach):
     touching = [e for e in inside.Edges
                 if min((v.Point - point).Length for v in e.Vertexes) < 1e-2]
     if not touching:
-        raise HexFillError("Could not measure the wall thickness; set Depth")
+        raise SimpleHexError("Could not measure the wall thickness; set Depth")
     return min(max(e.Length for e in touching), reach.inward)
 
 
@@ -263,7 +263,7 @@ def surface_tools(obj, solid, subtractive):
     surface = face.Surface
     size, wall = obj.CellSize.Value, obj.Wall.Value
     if size <= 0:
-        raise HexFillError("CellSize must be greater than zero")
+        raise SimpleHexError("CellSize must be greater than zero")
 
     deflection = max(1e-3, size * 0.002)
     pitch_value = hexgrid.pitch(size, wall)
@@ -271,12 +271,12 @@ def surface_tools(obj, solid, subtractive):
     wrap_width = None
     if is_full_wrap(face):
         if abs(obj.Angle.Value) > 1e-9:
-            raise HexFillError("Angle must be 0 when the pattern wraps all the way round")
+            raise SimpleHexError("Angle must be 0 when the pattern wraps all the way round")
         wrap_width = dev.circumference
         _, pitch_value = develop.wrap_pitch(wrap_width, pitch_value, obj.Orientation)
         size = pitch_value - wall
         if size <= 0:
-            raise HexFillError("Wall is too thick for the wrapped pitch")
+            raise SimpleHexError("Wall is too thick for the wrapped pitch")
 
     region, x0 = developed_region(face, dev, deflection, wrap_width)
     single_turn_area = region.Area / 3.0 if wrap_width else region.Area
@@ -293,9 +293,9 @@ def surface_tools(obj, solid, subtractive):
     depth = obj.Depth.Value
     if depth <= 0:
         if not subtractive:
-            raise HexFillError("Depth must be greater than zero")
+            raise SimpleHexError("Depth must be greater than zero")
         if solid is None:
-            raise HexFillError("Depth 0 (through) needs the solid the face belongs to")
+            raise SimpleHexError("Depth 0 (through) needs the solid the face belongs to")
         depth = through_depth(face, solid, reach)
 
     # Offsets are along the surface's natural normal; ``out`` converts from
@@ -303,12 +303,12 @@ def surface_tools(obj, solid, subtractive):
     out = material_side(face)
     if subtractive:
         if depth > reach.inward:
-            raise HexFillError("Depth reaches the axis; at most {:.2f} mm".format(reach.inward))
+            raise SimpleHexError("Depth reaches the axis; at most {:.2f} mm".format(reach.inward))
         clearance = min(reach.clearance, reach.outward)
         start, thickness = out * clearance, -out * (depth + clearance)
     else:
         if depth > reach.outward:
-            raise HexFillError("Depth reaches the axis; at most {:.2f} mm".format(reach.outward))
+            raise SimpleHexError("Depth reaches the axis; at most {:.2f} mm".format(reach.outward))
         start, thickness = -out * OVERSHOOT, out * (depth + OVERSHOOT)
     target = offset_surface(face, start)
 
@@ -317,7 +317,7 @@ def surface_tools(obj, solid, subtractive):
         try:
             return cell.makeOffsetShape(thickness, 1e-6, fill=True)
         except Part.OCCError as e:
-            raise HexFillError("Could not thicken a cell: {}".format(e))
+            raise SimpleHexError("Could not thicken a cell: {}".format(e))
 
     tools = []
     template = None
@@ -412,6 +412,6 @@ def make_hexsurface(doc, source):
     HexSurface(obj)
     obj.Source = source
     if App.GuiUp:
-        from ..gui.viewproviders import ViewProviderHexFill
-        ViewProviderHexFill(obj.ViewObject)
+        from ..gui.viewproviders import ViewProviderSimpleHex
+        ViewProviderSimpleHex(obj.ViewObject)
     return obj

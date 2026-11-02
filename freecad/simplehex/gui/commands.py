@@ -5,8 +5,8 @@ from PySide import QtGui
 
 from .. import icon
 from ..export import export_dxf
-from ..features.hexfill import make_hexfill
-from ..features.pd_features import (HexFillCut, HexFillPad, HexSurfaceCut, HexSurfacePad,
+from ..features.simplehex import make_simplehex
+from ..features.pd_features import (SimpleHexCut, SimpleHexPad, HexSurfaceCut, HexSurfacePad,
                                    make_body_feature)
 from ..features.surface import is_curved, make_hexsurface
 
@@ -19,15 +19,15 @@ def _curved_face(sel):
     return is_curved(sel.Object.Shape.getElement(names[0]))
 
 
-def _is_hexfill(obj):
-    """A flat HexFill (Part feature with an Output), the only DXF-exportable kind."""
+def _is_simplehex(obj):
+    """A flat SimpleHex (Part feature with an Output), the only DXF-exportable kind."""
     return obj.isDerivedFrom("Part::FeaturePython") and "Output" in obj.PropertiesList
 
 
-class HexFillRegionCommand:
+class SimpleHexRegionCommand:
     def GetResources(self):
         return {
-            "Pixmap": icon("HexFill.svg"),
+            "Pixmap": icon("SimpleHex.svg"),
             "MenuText": "Hex Fill Region",
             "ToolTip": "Fill a closed sketch, wire, or planar face with a hex pattern. "
                        "On a curved face, make hex cell solids to cut or emboss",
@@ -42,7 +42,7 @@ class HexFillRegionCommand:
         # Persistent, so it outlives this command; the task panel closes it.
         App.setActiveTransaction("Hex Fill Region", True)
         source = (sel.Object, list(sel.SubElementNames))
-        make = make_hexsurface if _curved_face(sel) else make_hexfill
+        make = make_hexsurface if _curved_face(sel) else make_simplehex
         obj = make(doc, source)
         doc.recompute()
         Gui.ActiveDocument.setEdit(obj, 0)
@@ -58,7 +58,7 @@ def _body_for(obj):
 
 
 class BodyFeatureCommand:
-    """Create a HexFillCut or HexFillPad in the Body of the selected sketch/face."""
+    """Create a SimpleHexCut or SimpleHexPad in the Body of the selected sketch/face."""
 
     def __init__(self, feature_class, surface_class, pixmap, menu_text, tooltip):
         self.feature_class = feature_class
@@ -89,16 +89,16 @@ class BodyFeatureCommand:
 class ExportDxfCommand:
     def GetResources(self):
         return {
-            "Pixmap": icon("HexFillExportDXF.svg"),
+            "Pixmap": icon("SimpleHexExportDXF.svg"),
             "MenuText": "Export to DXF",
-            "ToolTip": "Export selected Hex Fill objects and their source outlines to DXF",
+            "ToolTip": "Export selected SimpleHex objects and their source outlines to DXF",
         }
 
     def IsActive(self):
-        return any(_is_hexfill(o) for o in Gui.Selection.getSelection())
+        return any(_is_simplehex(o) for o in Gui.Selection.getSelection())
 
     def Activated(self):
-        fills = [o for o in Gui.Selection.getSelection() if _is_hexfill(o)]
+        fills = [o for o in Gui.Selection.getSelection() if _is_simplehex(o)]
         if any(o.Output == "Solid" for o in fills):
             QtGui.QMessageBox.warning(Gui.getMainWindow(), "Export to DXF",
                                       "Set Output to Faces or Wires to export a flat DXF.")
@@ -113,16 +113,16 @@ class ExportDxfCommand:
 
 
 COMMANDS = {
-    "HexFill_Region": HexFillRegionCommand(),
-    "HexFill_Cut": BodyFeatureCommand(
-        HexFillCut, HexSurfaceCut, "HexFillCut.svg", "Hex Fill Cut",
+    "SimpleHex_Region": SimpleHexRegionCommand(),
+    "SimpleHex_Cut": BodyFeatureCommand(
+        SimpleHexCut, HexSurfaceCut, "SimpleHexCut.svg", "Hex Fill Cut",
         "Cut a hex pattern into the Body (PartDesign feature). Works on sketches, "
         "planar faces, and curved faces"),
-    "HexFill_Pad": BodyFeatureCommand(
-        HexFillPad, HexSurfacePad, "HexFillPad.svg", "Hex Fill Pad",
+    "SimpleHex_Pad": BodyFeatureCommand(
+        SimpleHexPad, HexSurfacePad, "SimpleHexPad.svg", "Hex Fill Pad",
         "Raise a hex pattern on the Body (PartDesign feature). Works on sketches, "
         "planar faces, and curved faces"),
-    "HexFill_ExportDXF": ExportDxfCommand(),
+    "SimpleHex_ExportDXF": ExportDxfCommand(),
 }
 
 for _name, _command in COMMANDS.items():
