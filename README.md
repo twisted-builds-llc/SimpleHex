@@ -7,11 +7,11 @@ Open source FreeCAD workbench that fills a closed sketch or planar face with a p
 ## Install (development)
 Not yet in the Addon Manager catalog. Clone the repository into your FreeCAD `Mod` folder (FreeCAD 1.1 on Linux shown; 1.0 uses `v1-0`):
 
-    git clone https://github.com/twisted-builds-llc/hexagons_for_FreeCAD.git ~/.local/share/FreeCAD/v1-1/Mod/SimpleHex
+    git clone https://github.com/twisted-builds-llc/SimpleHex.git ~/.local/share/FreeCAD/v1-1/Mod/SimpleHex
 
 Restart FreeCAD and pick the **SimpleHex** workbench. Update later with `git pull` in that folder.
 
-Alternatively, add `https://github.com/twisted-builds-llc/hexagons_for_FreeCAD` (branch `main`) under **Addon Manager → Preferences → Custom repositories**, then install SimpleHex from the Addon Manager.
+Alternatively, add `https://github.com/twisted-builds-llc/SimpleHex` (branch `main`) under **Addon Manager → Preferences → Custom repositories**, then install SimpleHex from the Addon Manager.
 
 ## Use
 1. Select a closed sketch (holes allowed) or a planar face.
