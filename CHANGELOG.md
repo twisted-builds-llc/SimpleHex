@@ -9,3 +9,5 @@
 - Task panel with live preview, sizing modes (flat-to-flat, corner-to-corner, pitch + open area), readouts and large-pattern warning.
 - "Export to DXF" command (pattern plus its source outline).
 - Example: `examples/plasma_panel.FCStd`.
+- PartDesign features **Hex Fill Cut** (`PartDesign::FeatureSubtractivePython`; Depth 0 cuts through all, both sides) and **Hex Fill Pad** (`PartDesign::FeatureAdditivePython`; raised cells). Source can be a sketch or a planar face in the Body.
+- Example: `examples/vent_cover.FCStd`.

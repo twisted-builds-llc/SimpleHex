@@ -6,6 +6,7 @@ from PySide import QtGui
 from .. import icon
 from ..export import export_dxf
 from ..features.hexfill import make_hexfill
+from ..features.pd_features import HexFillCut, HexFillPad, make_body_feature
 
 
 def _is_hexfill(obj):
@@ -30,6 +31,43 @@ class HexFillRegionCommand:
         App.setActiveTransaction("Hex Fill Region", True)
         obj = make_hexfill(doc, (sel.Object, list(sel.SubElementNames)))
         doc.recompute()
+        Gui.ActiveDocument.setEdit(obj, 0)
+
+
+def _body_for(obj):
+    """The PartDesign Body holding obj, else the active Body, else None."""
+    parent = obj.getParentGeoFeatureGroup()
+    if parent is not None and parent.isDerivedFrom("PartDesign::Body"):
+        return parent
+    view = Gui.ActiveDocument.ActiveView if Gui.ActiveDocument else None
+    return view.getActiveObject("pdbody") if view else None
+
+
+class BodyFeatureCommand:
+    """Create a HexFillCut or HexFillPad in the Body of the selected sketch/face."""
+
+    def __init__(self, feature_class, pixmap, menu_text, tooltip):
+        self.feature_class = feature_class
+        self.resources = {"Pixmap": icon(pixmap), "MenuText": menu_text, "ToolTip": tooltip}
+
+    def GetResources(self):
+        return self.resources
+
+    def IsActive(self):
+        return App.ActiveDocument is not None and bool(Gui.Selection.getSelectionEx())
+
+    def Activated(self):
+        sel = Gui.Selection.getSelectionEx()[0]
+        body = _body_for(sel.Object)
+        if body is None:
+            QtGui.QMessageBox.warning(
+                Gui.getMainWindow(), self.resources["MenuText"],
+                "Select a sketch or face inside a PartDesign Body, or activate a Body.")
+            return
+        App.setActiveTransaction(self.resources["MenuText"], True)
+        obj = make_body_feature(body, (sel.Object, list(sel.SubElementNames)),
+                                self.feature_class)
+        App.ActiveDocument.recompute()
         Gui.ActiveDocument.setEdit(obj, 0)
 
 
@@ -61,6 +99,12 @@ class ExportDxfCommand:
 
 COMMANDS = {
     "HexFill_Region": HexFillRegionCommand(),
+    "HexFill_Cut": BodyFeatureCommand(
+        HexFillCut, "HexFillCut.svg", "Hex Fill Cut",
+        "Cut a hex pattern into the Body (PartDesign feature)"),
+    "HexFill_Pad": BodyFeatureCommand(
+        HexFillPad, "HexFillPad.svg", "Hex Fill Pad",
+        "Raise a hex pattern on the Body (PartDesign feature)"),
     "HexFill_ExportDXF": ExportDxfCommand(),
 }
 

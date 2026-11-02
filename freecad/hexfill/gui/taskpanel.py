@@ -37,6 +37,8 @@ class HexFillTaskPanel:
     def __init__(self, obj, creating=False):
         self.obj = obj
         self.creating = creating
+        # PartDesign features have no Output: they always extrude.
+        self.has_output = "Output" in obj.PropertiesList
         self.doc = obj.Document
         self._updating = False
         self.form = self._build_form()
@@ -89,7 +91,8 @@ class HexFillTaskPanel:
         self.fraction_label = QtGui.QLabel("Min cell fraction")
         self.output = _combo(OUTPUTS)
         self.depth_box = _quantity_box("mm", 0.0)
-        self.depth_label = QtGui.QLabel("Depth")
+        cut_through = not self.has_output and self.obj.Proxy.subtractive
+        self.depth_label = QtGui.QLabel("Depth (0 = through all)" if cut_through else "Depth")
         self.reversed = QtGui.QCheckBox("Reversed")
 
         for label, widget in (
@@ -104,7 +107,8 @@ class HexFillTaskPanel:
         ):
             layout.addRow(label, widget)
         layout.addRow(self.fraction_label, self.fraction_box)
-        layout.addRow("Output", self.output)
+        if self.has_output:
+            layout.addRow("Output", self.output)
         layout.addRow(self.depth_label, self.depth_box)
         layout.addRow("", self.reversed)
 
@@ -148,7 +152,8 @@ class HexFillTaskPanel:
             self.anchor.setCurrentIndex(ANCHORS.index(obj.Anchor))
             self.edge_mode.setCurrentIndex(EDGE_MODES.index(obj.EdgeMode))
             self.fraction_box.setValue(obj.MinCellFraction)
-            self.output.setCurrentIndex(OUTPUTS.index(obj.Output))
+            if self.has_output:
+                self.output.setCurrentIndex(OUTPUTS.index(obj.Output))
             self.depth_box.setProperty("rawValue", obj.Depth.Value)
             self.reversed.setChecked(obj.Reversed)
         finally:
@@ -193,7 +198,8 @@ class HexFillTaskPanel:
         obj.Anchor = self.anchor.currentText()
         obj.EdgeMode = self.edge_mode.currentText()
         obj.MinCellFraction = self.fraction_box.value()
-        obj.Output = self.output.currentText()
+        if self.has_output:
+            obj.Output = self.output.currentText()
         obj.Depth = self.depth_box.property("rawValue")
         obj.Reversed = self.reversed.isChecked()
 
@@ -227,7 +233,7 @@ class HexFillTaskPanel:
         clip_min = self.edge_mode.currentText() == "ClipMinArea"
         self.fraction_label.setVisible(clip_min)
         self.fraction_box.setVisible(clip_min)
-        solid = self.output.currentText() == "Solid"
+        solid = not self.has_output or self.output.currentText() == "Solid"
         self.depth_label.setVisible(solid)
         self.depth_box.setVisible(solid)
         self.reversed.setVisible(solid)

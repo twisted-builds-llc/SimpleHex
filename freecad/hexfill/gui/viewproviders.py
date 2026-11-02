@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 from .. import icon
 
+ICONS = {"HexFillCut": "HexFillCut.svg", "HexFillPad": "HexFillPad.svg"}
+
 
 class ViewProviderHexFill:
     def __init__(self, vobj):
@@ -10,11 +12,14 @@ class ViewProviderHexFill:
         self.Object = vobj.Object
 
     def getIcon(self):
-        return icon("HexFill.svg")
+        obj = getattr(self, "Object", None)
+        kind = type(obj.Proxy).__name__ if obj is not None else "HexFill"
+        return icon(ICONS.get(kind, "HexFill.svg"))
 
     def claimChildren(self):
+        # Claim a whole-object source (a sketch), never the solid a face is on.
         source = self.Object.Source
-        return [source[0]] if source else []
+        return [source[0]] if source and not any(source[1]) else []
 
     def doubleClicked(self, vobj):
         vobj.Document.setEdit(vobj.Object, 0)

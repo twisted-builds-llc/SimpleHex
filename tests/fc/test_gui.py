@@ -98,6 +98,42 @@ def main():
     assert len(doc.Objects) == count and sk.Visibility
     log("PASS create + Cancel")
 
+    # PartDesign: Hex Fill Cut in a Body
+    body = doc.addObject("PartDesign::Body", "Body")
+    plate = doc.addObject("Sketcher::SketchObject", "Plate")
+    body.addObject(plate)
+    for a, b in zip(pts, pts[1:] + pts[:1]):
+        plate.addGeometry(Part.LineSegment(a, b))
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = plate
+    pad.Length = 3
+    doc.recompute()
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(plate)
+    Gui.runCommand("HexFill_Cut")
+    cut = doc.getObject("HexFillCut")
+    panel = active_panel()
+    assert not panel.has_output and "through all" in panel.depth_label.text()
+    assert body.Tip == cut and cut.isValid(), cut.getStatusString()
+    panel.radius_box.setProperty("rawValue", 1.0)
+    panel.accept()
+    assert cut.isValid() and cut.CornerRadius.Value == 1.0
+    assert cut.Shape.Volume < pad.Shape.Volume
+    assert cut.ViewObject.Proxy.getIcon().endswith("HexFillCut.svg")
+    log("PASS Hex Fill Cut + OK")
+
+    # Hex Fill Pad on a face, then Cancel: object gone, Tip restored
+    faces = cut.Shape.Faces
+    top = max(range(len(faces)), key=lambda i: faces[i].CenterOfMass.z)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(cut, "Face{}".format(top + 1))
+    count = len(doc.Objects)
+    Gui.runCommand("HexFill_Pad")
+    assert len(doc.Objects) == count + 1 and body.Tip.Name == "HexFillPad"
+    active_panel().reject()
+    assert len(doc.Objects) == count and body.Tip == cut
+    log("PASS Hex Fill Pad + Cancel")
+
 
 try:
     main()

@@ -23,6 +23,8 @@ freecad.__path__.append(os.path.join(ROOT, "freecad"))
 from freecad.hexfill.core import hexgrid  # noqa: E402
 from freecad.hexfill.export import export_dxf  # noqa: E402
 from freecad.hexfill.features.hexfill import inset, make_hexfill  # noqa: E402
+from freecad.hexfill.features.pd_features import (  # noqa: E402
+    HexFillCut, HexFillPad, make_body_feature)
 
 
 def rectangle_sketch(doc, w, h, hole_radius=0.0):
@@ -206,6 +208,113 @@ def test_plasma_example_dxf_export():
     kinds = [kind for kind, _ in dxf_entities(path)]
     assert kinds.count("CIRCLE") == 5  # mounting holes and centre bore
     check_dxf_contours(path)
+    App.closeDocument(doc.Name)
+
+
+def plate_body(doc, w=120, h=80, thickness=4, hole_radius=15):
+    """Body (moved and tilted) holding a padded plate; returns body, sketch, pad."""
+    body = doc.addObject("PartDesign::Body", "Body")
+    body.Placement = App.Placement(App.Vector(10, 20, 30), App.Rotation(App.Vector(0, 1, 0), 25))
+    sk = rectangle_sketch(doc, w, h, hole_radius)
+    body.addObject(sk)
+    sk.Placement = App.Placement(App.Vector(0, 0, 0), App.Rotation(App.Vector(1, 0, 0), 10))
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = sk
+    pad.Length = thickness
+    doc.recompute()
+    return body, sk, pad
+
+
+def test_body_cut_through_all_and_depth():
+    doc = App.newDocument("HexFillBodyCut")
+    body, sk, pad = plate_body(doc)
+    plate = pad.Shape.Volume
+    cut = make_body_feature(body, (sk, []), HexFillCut)
+    doc.recompute()
+    assert cut.isValid(), cut.getStatusString()
+    assert body.Tip == cut and cut.BaseFeature == pad
+    open_area = cut.CellCount * hexgrid.cell_area(6)
+    assert math.isclose(cut.Shape.Volume, plate - 4 * open_area, rel_tol=1e-6)
+    assert len(cut.Shape.Solids) == 1 and cut.Shape.isValid()
+    # Body shape (with Body placement) is the tip result moved by the Body.
+    assert math.isclose(body.Shape.Volume, cut.Shape.Volume, rel_tol=1e-9)
+
+    # Sketch is at the bottom face: a depth cut goes into the material only
+    # when reversed (cuts go against the sketch normal by default).
+    cut.Depth = 1.5
+    cut.Reversed = True
+    doc.recompute()
+    assert math.isclose(cut.Shape.Volume, plate - 1.5 * open_area, rel_tol=1e-6)
+    cut.Reversed = False
+    doc.recompute()
+    assert math.isclose(cut.Shape.Volume, plate, rel_tol=1e-9)
+
+    # Upstream edit: bigger hole -> fewer cells, still valid.
+    cut.Depth = 0
+    count = cut.CellCount
+    geo = sk.Geometry[4]
+    geo.Radius = 25
+    sk.Geometry = sk.Geometry[:4] + [geo]
+    doc.recompute()
+    assert cut.isValid(), cut.getStatusString()
+    assert cut.CellCount < count, (cut.CellCount, count)
+    assert math.isclose(cut.Shape.Volume,
+                        pad.Shape.Volume - 4 * cut.CellCount * hexgrid.cell_area(6), rel_tol=1e-6)
+
+    path = os.path.join(tempfile.mkdtemp(), "body.FCStd")
+    count, volume = cut.CellCount, cut.Shape.Volume
+    doc.saveAs(path)
+    App.closeDocument(doc.Name)
+    doc = App.openDocument(path)
+    cut = doc.getObject("HexFillCut")
+    assert isinstance(cut.Proxy, HexFillCut)
+    cut.touch()
+    doc.recompute()
+    assert cut.isValid(), cut.getStatusString()
+    assert cut.CellCount == count and math.isclose(cut.Shape.Volume, volume, rel_tol=1e-9)
+    App.closeDocument(doc.Name)
+
+
+def test_body_pad_embosses_cells():
+    doc = App.newDocument("HexFillBodyPad")
+    body, sk, pad = plate_body(doc, hole_radius=0)
+    plate = pad.Shape.Volume
+    # Emboss on the top face of the plate.
+    normal = sk.Placement.Rotation.multVec(App.Vector(0, 0, 1))
+    faces = pad.Shape.Faces
+    top = max(range(len(faces)), key=lambda i: faces[i].CenterOfMass.dot(normal))
+    name = "Face{}".format(top + 1)
+    emboss = make_body_feature(body, (pad, [name]), HexFillPad)
+    emboss.Margin = 3
+    emboss.Depth = 0.6
+    doc.recompute()
+    assert emboss.isValid(), emboss.getStatusString()
+    assert len(emboss.Shape.Solids) == 1 and emboss.Shape.isValid()
+    added = emboss.CellCount * hexgrid.cell_area(6) * 0.6
+    assert math.isclose(emboss.Shape.Volume, plate + added, rel_tol=1e-6)
+    # Pointing the cells into the plate adds nothing; disjoint cells are refused.
+    emboss.Reversed = True
+    doc.recompute()
+    assert math.isclose(emboss.Shape.Volume, plate, rel_tol=1e-6)
+
+    # The bottom face's outward normal points the other way: still embosses outward.
+    bottom = min(range(len(faces)), key=lambda i: faces[i].CenterOfMass.dot(normal))
+    emboss.Reversed = False
+    emboss.Source = (pad, ["Face{}".format(bottom + 1)])
+    doc.recompute()
+    assert emboss.isValid(), emboss.getStatusString()
+    assert math.isclose(emboss.Shape.Volume, plate + added, rel_tol=1e-6)
+    App.closeDocument(doc.Name)
+
+
+def test_body_feature_needs_base():
+    doc = App.newDocument("HexFillNoBase")
+    body = doc.addObject("PartDesign::Body", "Body")
+    sk = rectangle_sketch(doc, 50, 40)
+    body.addObject(sk)
+    cut = make_body_feature(body, (sk, []), HexFillCut)
+    doc.recompute()
+    assert not cut.isValid()
     App.closeDocument(doc.Name)
 
 

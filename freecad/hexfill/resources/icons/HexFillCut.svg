@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- SPDX-License-Identifier: LGPL-2.1-or-later -->
+  <path d="M4 50 L14 10 L60 10 L50 50 Z" fill="#d9dde3" stroke="#3a4552" stroke-width="2"/>
+  <polygon points="28.5,23.2 23.0,26.4 17.5,23.2 17.5,16.8 23.0,13.6 28.5,16.8" fill="#3a4552"/>
+  <polygon points="44.5,23.2 39.0,26.4 33.5,23.2 33.5,16.8 39.0,13.6 44.5,16.8" fill="#3a4552"/>
+  <polygon points="36.5,37.2 31.0,40.4 25.5,37.2 25.5,30.8 31.0,27.6 36.5,30.8" fill="#3a4552"/>
+  <polygon points="52.5,37.2 47.0,40.4 41.5,37.2 41.5,30.8 47.0,27.6 52.5,30.8" fill="#3a4552"/>
+  <path d="M52 52 v8 M48 56 l4 4 4 -4" stroke="#c03030" stroke-width="2.5" fill="none"/>
+</svg>

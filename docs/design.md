@@ -80,7 +80,6 @@ All lengths are in document units (mm by default).
 | `Anchor` | Enum | Centered | Centered / BoundaryOrigin / Custom (where the grid's origin sits) |
 | `EdgeMode` | Enum | WholeOnly | WholeOnly / Clip / ClipMinArea |
 | `MinCellFraction` | Float | 0.35 | For ClipMinArea: drop clipped cells smaller than this fraction of a full cell |
-| `MinWeb` | Length | = Wall | Minimum material allowed between a clipped cell and the margin edge |
 | `CornerRadius` | Length | 0 | Fillets cell corners (useful for printing and plasma) |
 | `Output` | Enum | Faces | Wires / Faces / Solid |
 | `Depth` | Length | 0 = through | For Solid output and surface mode |
@@ -127,7 +126,7 @@ The core outputs plain tuples/lists with no FreeCAD imports, so pytest can check
 3. **EdgeMode behavior:**
    - `WholeOnly`: keep only fully-inside cells. Best for plasma/laser: no slivers, uniform webs.
    - `Clip`: keep straddling cells intersected with the inset face (`hexFace.common(insetFace)`).
-   - `ClipMinArea`: like Clip, but drop pieces with area < `MinCellFraction × fullCellArea`, and drop pieces that leave a web thinner than `MinWeb`.
+   - `ClipMinArea`: like Clip, but drop pieces with area < `MinCellFraction × fullCellArea`. (A `MinWeb` property was considered and dropped: clipped cells stop at the margin line, so `Margin` already sets the minimum material at the boundary.)
 4. Boolean ops run **only on straddling cells**. Interior cells are built directly as faces, which keeps large patterns fast.
 
 ### 6.3 Performance targets
@@ -246,6 +245,7 @@ FreeCAD 1.0 was not available to test; re-check these there.
 - **Pocket profile:** a PartDesign Pocket accepts a `HexFill` (Part::FeaturePython, Faces output) directly as its Profile, even when the HexFill sits outside the Body. A `PartDesign::SubShapeBinder` of the HexFill also works. (The GUI may still ask about out-of-scope links.)
 - **Body membership:** a `Part::FeaturePython` cannot be added to a Body ("object is not allowed").
 - **`PartDesign::FeatureSubtractivePython`** works: added to a Body it gets `BaseFeature` set automatically, becomes the Tip, and exposes `AddSubShape` and `Refine`. M3 can build on it.
+- **M3 conventions:** HexFillCut `Depth = 0` cuts through all on *both* sides of the sketch plane (the usual intent for vents; differs from Pocket's one-sided Through All). Face sources use the face's outward normal. A result with more than one solid is an error.
 - **`makeOffset2D` with holes** is wrong (see §6.2); HexFill offsets each wire separately.
 - **Task panel transactions:** use `App.setActiveTransaction(name, True)` / `App.closeActiveTransaction(abort)`, and close the transaction *before* `resetEdit()`, which otherwise commits it.
 - **DXF export:** FreeCAD's exporter writes all-line wires as LWPOLYLINE but wires with arcs (rounded cells) as loose LINE/ARC entities. Contours are closed and free of duplicates (checked in tests).
@@ -256,7 +256,7 @@ FreeCAD 1.0 was not available to test; re-check these there.
 - **Integration (`freecadcmd`):** build features from example sketches, recompute, check `CellCount`, check the solid is valid (`shape.isValid()`), save/reopen round-trip.
 - **Manual fabrication checks:**
   - Print a test coupon at a few cell/wall combos (e.g. 4/0.8, 6/1.2, 10/2.0)
-  - Laser/plasma: export DXF, confirm closed contours, no duplicate edges, and webs ≥ MinWeb after kerf
+  - Laser/plasma: export DXF, confirm closed contours, no duplicate edges, and webs ≥ Wall after kerf
 - **CI:** GitHub Actions runs pytest on every push. FreeCAD integration tests run in a container with FreeCAD AppImage/conda (optional, add once stable).
 
 ## 11. License

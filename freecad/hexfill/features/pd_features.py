@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""PartDesign HexFillCut / HexFillPad: hex patterns as native Body features."""
+
+import FreeCAD as App
+import Part
+
+from .hexfill import HexFillError, add_pattern_properties, add_property, compute_pattern
+
+V = App.Vector
+
+
+class HexFillBodyFeature:
+    """Common base; subclasses set ``subtractive`` and ``type_id``."""
+
+    subtractive = True
+    type_id = None
+
+    def __init__(self, obj):
+        obj.Proxy = self
+        self.add_properties(obj)
+
+    def add_properties(self, obj):
+        add_pattern_properties(obj)
+        doc = ("Cut depth into the material; 0 cuts through all, both sides"
+               if self.subtractive else "Height of the raised cells")
+        add_property(obj, "App::PropertyLength", "Depth", "HexFill", doc,
+                     0.0 if self.subtractive else 1.0)
+        add_property(obj, "App::PropertyBool", "Reversed", "HexFill",
+                     "Flip the direction relative to the sketch normal", False)
+
+    def onDocumentRestored(self, obj):
+        self.add_properties(obj)
+
+    def dumps(self):
+        return None
+
+    def loads(self, state):
+        return None
+
+    __getstate__ = dumps
+    __setstate__ = loads
+
+    def execute(self, obj):
+        faces, placement = compute_pattern(obj)
+        base = obj.BaseFeature.Shape if obj.BaseFeature else Part.Shape()
+        if base.isNull() or not base.Solids:
+            raise HexFillError("Needs a solid to work on: add it after a Pad or other "
+                               "feature in the Body")
+        if not faces:
+            raise HexFillError("No cells fit in the region")
+
+        start, extent = self._extrusion(obj, base, placement)
+        tool = Part.makeCompound([f.translated(V(0, 0, start)).extrude(V(0, 0, extent))
+                                  for f in faces])
+        tool.transformShape(placement.toMatrix())
+
+        result = base.cut(tool) if self.subtractive else base.fuse(tool)
+        if obj.Refine:
+            result = result.removeSplitter()
+        if len(result.Solids) != 1:
+            raise HexFillError(
+                "Result has {} solids; a Body needs exactly one. "
+                "Check Depth, Reversed and the edge mode.".format(len(result.Solids)))
+
+        obj.AddSubShape = tool
+        obj.Shape = result
+
+    def _extrusion(self, obj, base, placement):
+        """Return (start, extent) along the region's local Z."""
+        depth = obj.Depth.Value
+        if self.subtractive and depth <= 0:
+            box = base.BoundBox
+            length = box.DiagonalLength + (box.Center - placement.Base).Length + 1.0
+            return -length, 2.0 * length
+        if depth <= 0:
+            raise HexFillError("Depth must be greater than zero")
+        # Cuts go into the material (against the sketch normal), pads out of it.
+        direction = -1.0 if self.subtractive else 1.0
+        if obj.Reversed:
+            direction = -direction
+        return 0.0, direction * depth
+
+
+class HexFillCut(HexFillBodyFeature):
+    subtractive = True
+    type_id = "PartDesign::FeatureSubtractivePython"
+
+
+class HexFillPad(HexFillBodyFeature):
+    subtractive = False
+    type_id = "PartDesign::FeatureAdditivePython"
+
+
+def make_body_feature(body, source, feature_class):
+    """Add a HexFillCut or HexFillPad after the Body's Tip."""
+    obj = body.newObject(feature_class.type_id, feature_class.__name__)
+    feature_class(obj)
+    obj.Source = source
+    if App.GuiUp:
+        from ..gui.viewproviders import ViewProviderHexFill
+        ViewProviderHexFill(obj.ViewObject)
+    return obj

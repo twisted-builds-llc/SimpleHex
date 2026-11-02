@@ -20,6 +20,113 @@ class HexFillError(Exception):
     pass
 
 
+def add_property(obj, kind, name, group, doc, value=None, enum=None, read_only=False):
+    """Add a property unless present (so restored documents get new ones)."""
+    if name in obj.PropertiesList:
+        return
+    obj.addProperty(kind, name, group, doc)
+    if enum is not None:
+        setattr(obj, name, list(enum))
+    if value is not None:
+        setattr(obj, name, value)
+    if read_only:
+        obj.setEditorMode(name, 1)
+
+
+def add_pattern_properties(obj):
+    """Properties shared by every feature that generates a hex pattern."""
+    add = lambda *a, **k: add_property(obj, *a, **k)  # noqa: E731
+    add("App::PropertyLinkSub", "Source", "HexFill",
+        "Closed sketch, wire, or planar face to fill")
+    add("App::PropertyLength", "CellSize", "Cells",
+        "Hex opening, flat-to-flat", 6.0)
+    add("App::PropertyLength", "Wall", "Cells",
+        "Web thickness between neighbouring cells", 1.2)
+    add("App::PropertyLength", "Margin", "Cells",
+        "Solid border kept inside the boundary", 2.0)
+    add("App::PropertyLength", "CornerRadius", "Cells",
+        "Fillet radius for cell corners (at most CellSize / 2)", 0.0)
+    add("App::PropertyEnumeration", "EdgeMode", "Edges",
+        "WholeOnly keeps whole cells; Clip trims edge cells to the margin; "
+        "ClipMinArea also drops trimmed cells below MinCellFraction",
+        "WholeOnly", EDGE_MODES)
+    add("App::PropertyFloat", "MinCellFraction", "Edges",
+        "ClipMinArea: drop trimmed cells smaller than this fraction of a full cell",
+        0.35)
+    add("App::PropertyEnumeration", "Orientation", "Grid",
+        "Hex orientation", hexgrid.POINTY_TOP, hexgrid.ORIENTATIONS)
+    add("App::PropertyAngle", "Angle", "Grid", "Rotates the whole grid", 0.0)
+    add("App::PropertyDistance", "OffsetX", "Grid", "Shifts the grid along X", 0.0)
+    add("App::PropertyDistance", "OffsetY", "Grid", "Shifts the grid along Y", 0.0)
+    add("App::PropertyEnumeration", "Anchor", "Grid",
+        "Where the grid origin sits: region centre, or the sketch origin "
+        "(non-sketch sources always use the centre)",
+        "Centered", ANCHORS)
+    add("App::PropertyInteger", "CellCount", "Result",
+        "Number of cells generated", read_only=True)
+    add("App::PropertyFloat", "OpenAreaPercent", "Result",
+        "Open area as a percentage of the source region", read_only=True)
+    add("App::PropertyLength", "Pitch", "Result",
+        "Centre-to-centre spacing (CellSize + Wall)", read_only=True)
+
+
+def compute_pattern(obj):
+    """Build the cell faces for ``obj``'s pattern properties.
+
+    Returns ``(faces, placement)``: planar faces in the region's local XY
+    frame, and the placement of that frame in the source's coordinates. Also
+    updates the read-only result properties.
+    """
+    faces, placement, is_sketch_frame = source_region(obj.Source)
+    local = faces.copy()
+    local.transformShape(placement.inverse().toMatrix())
+
+    size, wall = obj.CellSize.Value, obj.Wall.Value
+    radius = obj.CornerRadius.Value
+    if size <= 0:
+        raise HexFillError("CellSize must be greater than zero")
+    try:
+        full_area = hexgrid.cell_area(size, radius)
+    except ValueError as e:
+        raise HexFillError(str(e))
+
+    region = inset(local, obj.Margin.Value)
+    deflection = max(1e-4, size * DEFLECTION_RATIO)
+    rings = [[(p.x, p.y) for p in wire.discretize(Deflection=deflection)]
+             for face in region.Faces for wire in face.Wires]
+
+    if obj.Anchor == "Centered" or not is_sketch_frame:
+        box = local.BoundBox
+        origin = (box.Center.x, box.Center.y)
+    else:
+        origin = (0.0, 0.0)
+    origin = (origin[0] + obj.OffsetX.Value, origin[1] + obj.OffsetY.Value)
+
+    grid = hexgrid.HexGrid(size, wall, obj.Orientation, obj.Angle.Value, origin)
+    # All cells are congruent: build one and place copies (shared geometry).
+    template = cell_face(grid.vertices(0, 0), radius)
+    x0, y0 = grid.center(0, 0)
+    cell_faces = []
+    straddling = []
+    for cell in grid.fill(rings):
+        face = template.translated(App.Vector(cell.center[0] - x0, cell.center[1] - y0, 0))
+        if cell.status == hexgrid.INSIDE:
+            cell_faces.append(face)
+        elif obj.EdgeMode != "WholeOnly":
+            straddling.append(face)
+    if straddling:
+        min_area = (full_area * obj.MinCellFraction
+                    if obj.EdgeMode == "ClipMinArea" else 1e-9)
+        cell_faces += clip_cells(straddling, region, min_area)
+
+    obj.CellCount = len(cell_faces)
+    obj.Pitch = grid.pitch
+    area = local.Area
+    open_area = sum(f.Area for f in cell_faces)
+    obj.OpenAreaPercent = 100.0 * open_area / area if area > 0 else 0.0
+    return cell_faces, placement
+
+
 class HexFill:
     def __init__(self, obj):
         obj.Proxy = self
@@ -27,57 +134,13 @@ class HexFill:
 
     @staticmethod
     def add_properties(obj):
-        """Add any missing properties (also migrates older documents)."""
-
-        def add(kind, name, group, doc, value=None, enum=None, read_only=False):
-            if name in obj.PropertiesList:
-                return
-            obj.addProperty(kind, name, group, doc)
-            if enum is not None:
-                setattr(obj, name, list(enum))
-            if value is not None:
-                setattr(obj, name, value)
-            if read_only:
-                obj.setEditorMode(name, 1)
-
-        add("App::PropertyLinkSub", "Source", "HexFill",
-            "Closed sketch, wire, or planar face to fill")
-        add("App::PropertyLength", "CellSize", "Cells",
-            "Hex opening, flat-to-flat", 6.0)
-        add("App::PropertyLength", "Wall", "Cells",
-            "Web thickness between neighbouring cells", 1.2)
-        add("App::PropertyLength", "Margin", "Cells",
-            "Solid border kept inside the boundary", 2.0)
-        add("App::PropertyLength", "CornerRadius", "Cells",
-            "Fillet radius for cell corners (at most CellSize / 2)", 0.0)
-        add("App::PropertyEnumeration", "EdgeMode", "Edges",
-            "WholeOnly keeps whole cells; Clip trims edge cells to the margin; "
-            "ClipMinArea also drops trimmed cells below MinCellFraction",
-            "WholeOnly", EDGE_MODES)
-        add("App::PropertyFloat", "MinCellFraction", "Edges",
-            "ClipMinArea: drop trimmed cells smaller than this fraction of a full cell",
-            0.35)
-        add("App::PropertyEnumeration", "Orientation", "Grid",
-            "Hex orientation", hexgrid.POINTY_TOP, hexgrid.ORIENTATIONS)
-        add("App::PropertyAngle", "Angle", "Grid", "Rotates the whole grid", 0.0)
-        add("App::PropertyDistance", "OffsetX", "Grid", "Shifts the grid along X", 0.0)
-        add("App::PropertyDistance", "OffsetY", "Grid", "Shifts the grid along Y", 0.0)
-        add("App::PropertyEnumeration", "Anchor", "Grid",
-            "Where the grid origin sits: region centre, or the sketch origin "
-            "(non-sketch sources always use the centre)",
-            "Centered", ANCHORS)
-        add("App::PropertyEnumeration", "Output", "Output",
-            "Closed wires, planar faces, or extruded prisms", "Faces", OUTPUTS)
-        add("App::PropertyLength", "Depth", "Output",
-            "Extrusion depth for Solid output", 0.0)
-        add("App::PropertyBool", "Reversed", "Output",
-            "Extrude in the opposite direction", False)
-        add("App::PropertyInteger", "CellCount", "Result",
-            "Number of cells generated", read_only=True)
-        add("App::PropertyFloat", "OpenAreaPercent", "Result",
-            "Open area as a percentage of the source region", read_only=True)
-        add("App::PropertyLength", "Pitch", "Result",
-            "Centre-to-centre spacing (CellSize + Wall)", read_only=True)
+        add_pattern_properties(obj)
+        add_property(obj, "App::PropertyEnumeration", "Output", "Output",
+                     "Closed wires, planar faces, or extruded prisms", "Faces", OUTPUTS)
+        add_property(obj, "App::PropertyLength", "Depth", "Output",
+                     "Extrusion depth for Solid output", 0.0)
+        add_property(obj, "App::PropertyBool", "Reversed", "Output",
+                     "Extrude in the opposite direction", False)
 
     def onDocumentRestored(self, obj):
         self.add_properties(obj)
@@ -93,58 +156,11 @@ class HexFill:
     __setstate__ = loads
 
     def execute(self, obj):
-        faces, placement, is_sketch_frame = source_region(obj.Source)
-        local = faces.copy()
-        local.transformShape(placement.inverse().toMatrix())
-
-        size, wall = obj.CellSize.Value, obj.Wall.Value
-        radius = obj.CornerRadius.Value
-        if size <= 0:
-            raise HexFillError("CellSize must be greater than zero")
-        try:
-            full_area = hexgrid.cell_area(size, radius)
-        except ValueError as e:
-            raise HexFillError(str(e))
-
-        region = inset(local, obj.Margin.Value)
-        deflection = max(1e-4, size * DEFLECTION_RATIO)
-        rings = [[(p.x, p.y) for p in wire.discretize(Deflection=deflection)]
-                 for face in region.Faces for wire in face.Wires]
-
-        if obj.Anchor == "Centered" or not is_sketch_frame:
-            box = local.BoundBox
-            origin = (box.Center.x, box.Center.y)
-        else:
-            origin = (0.0, 0.0)
-        origin = (origin[0] + obj.OffsetX.Value, origin[1] + obj.OffsetY.Value)
-
-        grid = hexgrid.HexGrid(size, wall, obj.Orientation, obj.Angle.Value, origin)
-        # All cells are congruent: build one and place copies (shared geometry).
-        template = cell_face(grid.vertices(0, 0), radius)
-        x0, y0 = grid.center(0, 0)
-        cell_faces = []
-        straddling = []
-        for cell in grid.fill(rings):
-            face = template.translated(App.Vector(cell.center[0] - x0, cell.center[1] - y0, 0))
-            if cell.status == hexgrid.INSIDE:
-                cell_faces.append(face)
-            elif obj.EdgeMode != "WholeOnly":
-                straddling.append(face)
-        if straddling:
-            min_area = (full_area * obj.MinCellFraction
-                        if obj.EdgeMode == "ClipMinArea" else 1e-9)
-            cell_faces += clip_cells(straddling, region, min_area)
-
+        faces, placement = compute_pattern(obj)
         # The feature's Placement owns the frame: FreeCAD would overwrite any
         # placement carried by the shape itself.
-        obj.Shape = build_output(cell_faces, obj.Output, obj.Depth.Value, obj.Reversed)
+        obj.Shape = build_output(faces, obj.Output, obj.Depth.Value, obj.Reversed)
         obj.Placement = placement
-
-        obj.CellCount = len(cell_faces)
-        obj.Pitch = grid.pitch
-        area = local.Area
-        open_area = sum(f.Area for f in cell_faces)
-        obj.OpenAreaPercent = 100.0 * open_area / area if area > 0 else 0.0
 
 
 def source_region(source):
@@ -184,7 +200,10 @@ def source_region(source):
 
     if obj.isDerivedFrom("Sketcher::SketchObject"):
         return faces, obj.Placement, True
-    rotation = App.Rotation(App.Vector(0, 0, 1), plane.Axis)
+    # A selected face's own normal points out of its solid; a plane fitted to
+    # wires has no preferred side.
+    axis = faces.Faces[0].normalAt(0, 0) if subs else plane.Axis
+    rotation = App.Rotation(App.Vector(0, 0, 1), axis)
     return faces, App.Placement(plane.Position, rotation), False
 
 

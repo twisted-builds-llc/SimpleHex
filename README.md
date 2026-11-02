@@ -2,7 +2,7 @@
 
 Open source FreeCAD workbench that fills a closed sketch or planar face with a parametric hexagon (honeycomb) pattern. Useful for 3D-print lightweighting, vents and grilles, and laser/plasma sheet parts.
 
-**Status:** early development (milestone M2 done). Not yet in the Addon Manager.
+**Status:** early development (milestone M3 done). Not yet in the Addon Manager.
 
 ## Install (development)
 Link or clone this repository into your FreeCAD `Mod` folder, e.g. on Linux:
@@ -19,7 +19,10 @@ Restart FreeCAD and pick the **HexFill** workbench.
 
 Edge modes: **WholeOnly** keeps only complete cells (no slivers), **Clip** trims edge cells to the margin, **ClipMinArea** trims but drops pieces smaller than `MinCellFraction` of a cell.
 
-To cut the pattern in PartDesign, use the HexFill (Faces output) as the profile of a Pocket.
+### PartDesign
+Select a sketch or a planar face inside a Body and click **Hex Fill Cut** or **Hex Fill Pad**. These are native Body features: they sit in the tree like a Pocket or Pad and update when the sketch changes.
+- **Hex Fill Cut:** `Depth` 0 cuts through all, on both sides of the sketch. A positive depth cuts into the material, against the sketch normal; tick `Reversed` to flip.
+- **Hex Fill Pad:** raises the cells by `Depth`, along the face's outward normal or the sketch normal.
 
 ## Development
     python3 -m venv .venv && .venv/bin/pip install pytest
