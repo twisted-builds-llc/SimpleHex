@@ -13,6 +13,7 @@ from PySide import QtCore, QtGui
 from .. import icon
 from ..core import hexgrid
 from ..features.hexfill import ANCHORS, EDGE_MODES, OUTPUTS
+from ..features.surface import MODES
 
 PARAMS = App.ParamGet("User parameter:BaseApp/Preferences/Mod/HexFill")
 
@@ -39,6 +40,11 @@ class HexFillTaskPanel:
         self.creating = creating
         # PartDesign features have no Output: they always extrude.
         self.has_output = "Output" in obj.PropertiesList
+        self.has_reversed = "Reversed" in obj.PropertiesList
+        self.has_mode = "Mode" in obj.PropertiesList  # Part HexSurface
+        # Curved-surface Booleans are slow, so they preview on demand by default.
+        self.preview_key = "LivePreview" if "Surface" not in type(obj.Proxy).__name__ \
+            else "LivePreviewSurface"
         self.doc = obj.Document
         self._updating = False
         self.form = self._build_form()
@@ -91,9 +97,9 @@ class HexFillTaskPanel:
         self.fraction_label = QtGui.QLabel("Min cell fraction")
         self.output = _combo(OUTPUTS)
         self.depth_box = _quantity_box("mm", 0.0)
-        cut_through = not self.has_output and self.obj.Proxy.subtractive
-        self.depth_label = QtGui.QLabel("Depth (0 = through all)" if cut_through else "Depth")
+        self.depth_label = QtGui.QLabel()
         self.reversed = QtGui.QCheckBox("Reversed")
+        self.mode = _combo(MODES)
 
         for label, widget in (
             ("Margin", self.margin_box),
@@ -109,15 +115,19 @@ class HexFillTaskPanel:
         layout.addRow(self.fraction_label, self.fraction_box)
         if self.has_output:
             layout.addRow("Output", self.output)
+        if self.has_mode:
+            layout.addRow("Mode", self.mode)
         layout.addRow(self.depth_label, self.depth_box)
-        layout.addRow("", self.reversed)
+        if self.has_reversed:
+            layout.addRow("", self.reversed)
 
         self.readout = QtGui.QLabel()
         self.warning = QtGui.QLabel()
         self.warning.setStyleSheet("color: #c06000;")
         self.warning.setWordWrap(True)
         self.preview = QtGui.QCheckBox("Live preview")
-        self.preview.setChecked(PARAMS.GetBool("LivePreview", True))
+        self.preview.setChecked(PARAMS.GetBool(self.preview_key,
+                                               self.preview_key == "LivePreview"))
         self.refresh = QtGui.QPushButton("Refresh")
         layout.addRow(self.readout)
         layout.addRow(self.warning)
@@ -128,7 +138,7 @@ class HexFillTaskPanel:
             QtCore.QObject.connect(box, QtCore.SIGNAL("valueChanged(double)"), self._changed)
         self.open_box.valueChanged.connect(self._changed)
         self.fraction_box.valueChanged.connect(self._changed)
-        for combo in (self.orientation, self.anchor, self.edge_mode, self.output):
+        for combo in (self.orientation, self.anchor, self.edge_mode, self.output, self.mode):
             combo.currentIndexChanged.connect(self._changed)
         self.reversed.toggled.connect(self._changed)
         self.sizing.currentIndexChanged.connect(self._sizing_changed)
@@ -155,7 +165,10 @@ class HexFillTaskPanel:
             if self.has_output:
                 self.output.setCurrentIndex(OUTPUTS.index(obj.Output))
             self.depth_box.setProperty("rawValue", obj.Depth.Value)
-            self.reversed.setChecked(obj.Reversed)
+            if self.has_reversed:
+                self.reversed.setChecked(obj.Reversed)
+            if self.has_mode:
+                self.mode.setCurrentIndex(MODES.index(obj.Mode))
         finally:
             self._updating = False
 
@@ -201,7 +214,10 @@ class HexFillTaskPanel:
         if self.has_output:
             obj.Output = self.output.currentText()
         obj.Depth = self.depth_box.property("rawValue")
-        obj.Reversed = self.reversed.isChecked()
+        if self.has_reversed:
+            obj.Reversed = self.reversed.isChecked()
+        if self.has_mode:
+            obj.Mode = self.mode.currentText()
 
     # --- Reactions ----------------------------------------------------------
 
@@ -225,7 +241,7 @@ class HexFillTaskPanel:
             self._updating = False
 
     def _preview_toggled(self, checked):
-        PARAMS.SetBool("LivePreview", checked)
+        PARAMS.SetBool(self.preview_key, checked)
         if checked:
             self._recompute()
 
@@ -234,9 +250,17 @@ class HexFillTaskPanel:
         self.fraction_label.setVisible(clip_min)
         self.fraction_box.setVisible(clip_min)
         solid = not self.has_output or self.output.currentText() == "Solid"
+        through = "through" if self.preview_key == "LivePreviewSurface" else "through all"
+        self.depth_label.setText("Depth (0 = {})".format(through) if self._cuts() else "Depth")
         self.depth_label.setVisible(solid)
         self.depth_box.setVisible(solid)
         self.reversed.setVisible(solid)
+
+    def _cuts(self):
+        """True when Depth 0 means "through" (subtractive objects)."""
+        if self.has_mode:
+            return self.mode.currentText() == "Cut"
+        return not self.has_output and self.obj.Proxy.subtractive
 
     def _recompute(self):
         self.doc.recompute()

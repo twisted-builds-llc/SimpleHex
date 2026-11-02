@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 from .. import icon
 
-ICONS = {"HexFillCut": "HexFillCut.svg", "HexFillPad": "HexFillPad.svg"}
+ICONS = {"HexFillCut": "HexFillCut.svg", "HexFillPad": "HexFillPad.svg",
+         "HexSurfaceCut": "HexFillCut.svg", "HexSurfacePad": "HexFillPad.svg"}
 
 
 class ViewProviderHexFill:

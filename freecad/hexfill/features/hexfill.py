@@ -81,8 +81,28 @@ def compute_pattern(obj):
     local = faces.copy()
     local.transformShape(placement.inverse().toMatrix())
 
-    size, wall = obj.CellSize.Value, obj.Wall.Value
-    radius = obj.CornerRadius.Value
+    if obj.Anchor == "Centered" or not is_sketch_frame:
+        box = local.BoundBox
+        origin = (box.Center.x, box.Center.y)
+    else:
+        origin = (0.0, 0.0)
+
+    cells, grid = pattern_cells(obj, local, origin)
+    cell_faces = [face for face, _ in cells]
+    set_results(obj, cell_faces, grid.pitch, local.Area)
+    return cell_faces, placement
+
+
+def pattern_cells(obj, local, origin, cell_size=None, keep=None):
+    """Lay ``obj``'s hex pattern over planar faces in the XY plane.
+
+    ``origin`` is the grid anchor before OffsetX/OffsetY. ``cell_size``
+    overrides obj.CellSize; ``keep(cell)`` can reject lattice cells before
+    they are built. Returns ``(cells, grid)`` where ``cells`` is a list of
+    ``(face, center)`` with ``center`` None for edge cells trimmed by Clip.
+    """
+    size = obj.CellSize.Value if cell_size is None else cell_size
+    wall, radius = obj.Wall.Value, obj.CornerRadius.Value
     if size <= 0:
         raise HexFillError("CellSize must be greater than zero")
     try:
@@ -95,36 +115,33 @@ def compute_pattern(obj):
     rings = [[(p.x, p.y) for p in wire.discretize(Deflection=deflection)]
              for face in region.Faces for wire in face.Wires]
 
-    if obj.Anchor == "Centered" or not is_sketch_frame:
-        box = local.BoundBox
-        origin = (box.Center.x, box.Center.y)
-    else:
-        origin = (0.0, 0.0)
     origin = (origin[0] + obj.OffsetX.Value, origin[1] + obj.OffsetY.Value)
-
     grid = hexgrid.HexGrid(size, wall, obj.Orientation, obj.Angle.Value, origin)
     # All cells are congruent: build one and place copies (shared geometry).
     template = cell_face(grid.vertices(0, 0), radius)
     x0, y0 = grid.center(0, 0)
-    cell_faces = []
+    cells = []
     straddling = []
     for cell in grid.fill(rings):
+        if keep is not None and not keep(cell):
+            continue
         face = template.translated(App.Vector(cell.center[0] - x0, cell.center[1] - y0, 0))
         if cell.status == hexgrid.INSIDE:
-            cell_faces.append(face)
+            cells.append((face, cell.center))
         elif obj.EdgeMode != "WholeOnly":
             straddling.append(face)
     if straddling:
         min_area = (full_area * obj.MinCellFraction
                     if obj.EdgeMode == "ClipMinArea" else 1e-9)
-        cell_faces += clip_cells(straddling, region, min_area)
+        cells += [(f, None) for f in clip_cells(straddling, region, min_area)]
+    return cells, grid
 
+
+def set_results(obj, cell_faces, pitch_value, region_area):
     obj.CellCount = len(cell_faces)
-    obj.Pitch = grid.pitch
-    area = local.Area
+    obj.Pitch = pitch_value
     open_area = sum(f.Area for f in cell_faces)
-    obj.OpenAreaPercent = 100.0 * open_area / area if area > 0 else 0.0
-    return cell_faces, placement
+    obj.OpenAreaPercent = 100.0 * open_area / region_area if region_area > 0 else 0.0
 
 
 class HexFill:

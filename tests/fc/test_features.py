@@ -24,7 +24,8 @@ from freecad.hexfill.core import hexgrid  # noqa: E402
 from freecad.hexfill.export import export_dxf  # noqa: E402
 from freecad.hexfill.features.hexfill import inset, make_hexfill  # noqa: E402
 from freecad.hexfill.features.pd_features import (  # noqa: E402
-    HexFillCut, HexFillPad, make_body_feature)
+    HexFillCut, HexFillPad, HexSurfaceCut, HexSurfacePad, make_body_feature)
+from freecad.hexfill.features.surface import make_hexsurface  # noqa: E402
 
 
 def rectangle_sketch(doc, w, h, hole_radius=0.0):
@@ -315,6 +316,164 @@ def test_body_feature_needs_base():
     cut = make_body_feature(body, (sk, []), HexFillCut)
     doc.recompute()
     assert not cut.isValid()
+    App.closeDocument(doc.Name)
+
+
+def tube_feature(doc, r_out=25.0, r_in=22.0, height=60.0):
+    tube = doc.addObject("Part::Feature", "Tube")
+    tube.Shape = Part.makeCylinder(r_out, height).cut(Part.makeCylinder(r_in, height))
+    tube.Placement = App.Placement(App.Vector(5, 6, 7), App.Rotation(App.Vector(1, 1, 0), 30))
+    return tube
+
+
+def face_name(obj, predicate):
+    faces = obj.Shape.Faces
+    return "Face{}".format(next(i for i, f in enumerate(faces) if predicate(f)) + 1)
+
+
+def is_cylinder(radius):
+    return lambda f: isinstance(f.Surface, Part.Cylinder) and abs(f.Surface.Radius - radius) < 1e-6
+
+
+def test_surface_vent_around_tube():
+    doc = App.newDocument("HexSurfaceTube")
+    tube = tube_feature(doc)
+    hs = make_hexsurface(doc, (tube, [face_name(tube, is_cylinder(25))]))
+    hs.CellSize = 5
+    hs.Wall = 1.5
+    hs.Margin = 4
+    hs.Depth = 0  # through the 3 mm wall
+    doc.recompute()
+    assert hs.isValid(), hs.getStatusString()
+    n = hs.CellCount
+    # Seam correction: whole number of repeats around 2*pi*25.
+    repeats = 2 * math.pi * 25 / hs.Pitch.Value
+    assert abs(repeats - round(repeats)) < 1e-9, repeats
+    assert abs(hs.Pitch.Value - 6.5) < 6.5 / round(repeats)
+    assert len(hs.Shape.Solids) == n and all(s.isValid() for s in hs.Shape.Solids)
+
+    vented = tube.Shape.cut(hs.Shape)
+    assert vented.isValid() and len(vented.Solids) == 1
+    # Each hole removes the wedge under one cell: open area on the outer
+    # surface matches the cell area (cells keep true size when wrapped).
+    size = hs.Pitch.Value - 1.5
+    outer_before = tube.Shape.getElement(face_name(tube, is_cylinder(25))).Area
+    outer_after = sum(f.Area for f in vented.Faces if is_cylinder(25)(f))
+    assert math.isclose(outer_before - outer_after, n * hexgrid.cell_area(size), rel_tol=1e-4)
+    # Through: the bore is perforated too. Walls follow the normals (radial),
+    # so holes there are narrower around the circumference by 22 / 25.
+    inner_before = tube.Shape.getElement(face_name(tube, is_cylinder(22))).Area
+    inner_after = sum(f.Area for f in vented.Faces if is_cylinder(22)(f))
+    assert math.isclose(inner_before - inner_after, n * hexgrid.cell_area(size) * 22 / 25,
+                        rel_tol=1e-4)
+    App.closeDocument(doc.Name)
+
+
+def test_surface_recess_emboss_and_partial_face():
+    doc = App.newDocument("HexSurfaceRecess")
+    tube = tube_feature(doc)
+    outer = (tube, [face_name(tube, is_cylinder(25))])
+    hs = make_hexsurface(doc, outer)
+    hs.Depth = 0.8
+    doc.recompute()
+    assert hs.isValid(), hs.getStatusString()
+    recessed = tube.Shape.cut(hs.Shape)
+    assert recessed.isValid()
+    removed = tube.Shape.Volume - recessed.Volume
+    cell = hexgrid.cell_area(hs.Pitch.Value - hs.Wall.Value)
+    # Radial walls: cell area at radius r is cell * r / 25; integrate 24.2..25.
+    expected = hs.CellCount * cell * (25 ** 2 - 24.2 ** 2) / (2 * 25)
+    assert math.isclose(removed, expected, rel_tol=1e-3), (removed, expected)
+    # Bore untouched.
+    assert math.isclose(sum(f.Area for f in recessed.Faces if is_cylinder(22)(f)),
+                        tube.Shape.getElement(face_name(tube, is_cylinder(22))).Area, rel_tol=1e-9)
+
+    hs.Mode = "Emboss"
+    doc.recompute()
+    assert hs.isValid(), hs.getStatusString()
+    embossed = tube.Shape.fuse(hs.Shape)
+    assert embossed.isValid() and len(embossed.Solids) == 1
+    assert embossed.Volume > tube.Shape.Volume
+
+    # Partial cylinder face (quarter turn): no wrap, margin on all sides.
+    quarter = doc.addObject("Part::Feature", "Quarter")
+    quarter.Shape = Part.makeCylinder(30, 50, App.Vector(), App.Vector(0, 0, 1), 90).cut(
+        Part.makeCylinder(26, 50))
+    qs = make_hexsurface(doc, (quarter, [face_name(quarter, is_cylinder(30))]))
+    qs.Depth = 0
+    qs.EdgeMode = "Clip"
+    doc.recompute()
+    assert qs.isValid(), qs.getStatusString()
+    assert math.isclose(qs.Pitch.Value, 7.2)  # no seam correction
+    cut = quarter.Shape.cut(qs.Shape)
+    assert cut.isValid() and len(cut.Solids) == 1
+    App.closeDocument(doc.Name)
+
+
+def test_surface_on_cone():
+    doc = App.newDocument("HexSurfaceCone")
+    cone = doc.addObject("Part::Feature", "Cone")
+    cone.Shape = Part.makeCone(30, 18, 40).cut(Part.makeCone(27, 15, 40))
+    side = face_name(cone, lambda f: isinstance(f.Surface, Part.Cone)
+                     and f.Surface.Radius > 29)
+    hs = make_hexsurface(doc, (cone, [side]))
+    hs.Depth = 0
+    doc.recompute()
+    assert hs.isValid(), hs.getStatusString()
+    assert hs.CellCount > 20
+    full = hexgrid.cell_area(6)
+    face = cone.Shape.getElement(side)
+    for tool in hs.Shape.Solids:
+        assert tool.isValid()
+        # Each cell keeps its true area on the cone surface.
+        assert math.isclose(tool.common(face).Area, full, rel_tol=2e-3)
+    cut = cone.Shape.cut(hs.Shape)
+    assert cut.isValid() and len(cut.Solids) == 1
+    App.closeDocument(doc.Name)
+
+
+def test_surface_body_features_roundtrip():
+    doc = App.newDocument("HexSurfaceBody")
+    body = doc.addObject("PartDesign::Body", "Body")
+    sk = doc.addObject("Sketcher::SketchObject", "Ring")
+    body.addObject(sk)
+    sk.addGeometry(Part.Circle(App.Vector(), App.Vector(0, 0, 1), 20))
+    sk.addGeometry(Part.Circle(App.Vector(), App.Vector(0, 0, 1), 17))
+    pad = body.newObject("PartDesign::Pad", "Pad")
+    pad.Profile = sk
+    pad.Length = 40
+    doc.recompute()
+    outer = (pad, [face_name(pad, is_cylinder(20))])
+    ribs = make_body_feature(body, outer, HexSurfacePad)
+    ribs.Depth = 0.5
+    ribs.CellSize = 4
+    ribs.Margin = 1
+    doc.recompute()
+    assert ribs.isValid(), ribs.getStatusString()
+    assert body.Tip == ribs and len(ribs.Shape.Solids) == 1
+    assert ribs.Shape.Volume > pad.Shape.Volume
+
+    # Vent through wall and ribs (embossed cells over the holes would float,
+    # so the cut comes second).
+    vent = make_body_feature(body, outer, HexSurfaceCut)
+    vent.CellSize = 8
+    vent.Margin = 5
+    doc.recompute()
+    assert vent.isValid(), vent.getStatusString()
+    assert body.Tip == vent and len(vent.Shape.Solids) == 1
+    assert vent.Shape.Volume < ribs.Shape.Volume
+
+    path = os.path.join(tempfile.mkdtemp(), "surface.FCStd")
+    counts = (vent.CellCount, ribs.CellCount)
+    doc.saveAs(path)
+    App.closeDocument(doc.Name)
+    doc = App.openDocument(path)
+    for name in ("HexSurfaceCut", "HexSurfacePad"):
+        doc.getObject(name).touch()
+    doc.recompute()
+    vent, ribs = doc.getObject("HexSurfaceCut"), doc.getObject("HexSurfacePad")
+    assert vent.isValid() and ribs.isValid(), (vent.getStatusString(), ribs.getStatusString())
+    assert (vent.CellCount, ribs.CellCount) == counts
     App.closeDocument(doc.Name)
 
 

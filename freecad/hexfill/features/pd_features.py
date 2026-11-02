@@ -5,6 +5,7 @@ import FreeCAD as App
 import Part
 
 from .hexfill import HexFillError, add_pattern_properties, add_property, compute_pattern
+from .surface import surface_tools
 
 V = App.Vector
 
@@ -41,18 +42,13 @@ class HexFillBodyFeature:
     __setstate__ = loads
 
     def execute(self, obj):
-        faces, placement = compute_pattern(obj)
         base = obj.BaseFeature.Shape if obj.BaseFeature else Part.Shape()
         if base.isNull() or not base.Solids:
             raise HexFillError("Needs a solid to work on: add it after a Pad or other "
                                "feature in the Body")
-        if not faces:
+        tool = self.make_tool(obj, base)
+        if not tool.Solids:
             raise HexFillError("No cells fit in the region")
-
-        start, extent = self._extrusion(obj, base, placement)
-        tool = Part.makeCompound([f.translated(V(0, 0, start)).extrude(V(0, 0, extent))
-                                  for f in faces])
-        tool.transformShape(placement.toMatrix())
 
         result = base.cut(tool) if self.subtractive else base.fuse(tool)
         if obj.Refine:
@@ -64,6 +60,17 @@ class HexFillBodyFeature:
 
         obj.AddSubShape = tool
         obj.Shape = result
+
+    def make_tool(self, obj, base):
+        """Prisms of the flat pattern, in Body coordinates."""
+        faces, placement = compute_pattern(obj)
+        if not faces:
+            return Part.Compound([])
+        start, extent = self._extrusion(obj, base, placement)
+        tool = Part.makeCompound([f.translated(V(0, 0, start)).extrude(V(0, 0, extent))
+                                  for f in faces])
+        tool.transformShape(placement.toMatrix())
+        return tool
 
     def _extrusion(self, obj, base, placement):
         """Return (start, extent) along the region's local Z."""
@@ -87,6 +94,30 @@ class HexFillCut(HexFillBodyFeature):
 
 
 class HexFillPad(HexFillBodyFeature):
+    subtractive = False
+    type_id = "PartDesign::FeatureAdditivePython"
+
+
+class HexSurfaceBodyFeature(HexFillBodyFeature):
+    """Pattern on a cylindrical or conical face of the Body."""
+
+    def add_properties(self, obj):
+        add_pattern_properties(obj)
+        doc = ("Depth along the surface normal; 0 cuts through the wall"
+               if self.subtractive else "Height of the raised cells")
+        add_property(obj, "App::PropertyLength", "Depth", "HexFill", doc,
+                     0.0 if self.subtractive else 1.0)
+
+    def make_tool(self, obj, base):
+        return Part.makeCompound(surface_tools(obj, base, self.subtractive))
+
+
+class HexSurfaceCut(HexSurfaceBodyFeature):
+    subtractive = True
+    type_id = "PartDesign::FeatureSubtractivePython"
+
+
+class HexSurfacePad(HexSurfaceBodyFeature):
     subtractive = False
     type_id = "PartDesign::FeatureAdditivePython"
 

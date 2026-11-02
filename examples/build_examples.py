@@ -23,7 +23,8 @@ if os.path.join(ROOT, "freecad") not in freecad.__path__:
     freecad.__path__.append(os.path.join(ROOT, "freecad"))
 
 from freecad.hexfill.features.hexfill import make_hexfill  # noqa: E402
-from freecad.hexfill.features.pd_features import HexFillCut, make_body_feature  # noqa: E402
+from freecad.hexfill.features.pd_features import (  # noqa: E402
+    HexFillCut, HexSurfaceCut, make_body_feature)
 
 V = App.Vector
 
@@ -82,6 +83,32 @@ def build_vent_cover(doc):
     return body, cut
 
 
+def build_cylinder_texture(doc):
+    """Tube (40 mm OD, 3 mm wall): hex recess texture all the way round."""
+    body = doc.addObject("PartDesign::Body", "Body")
+    sk = doc.addObject("Sketcher::SketchObject", "TubeSection")
+    body.addObject(sk)
+    sk.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1), 20))
+    sk.addGeometry(Part.Circle(V(0, 0, 0), V(0, 0, 1), 17))
+    pad = body.newObject("PartDesign::Pad", "Tube")
+    pad.Profile = sk
+    pad.Length = 50
+    doc.recompute()
+
+    outer = next(i for i, f in enumerate(pad.Shape.Faces)
+                 if isinstance(f.Surface, Part.Cylinder) and f.Surface.Radius > 19)
+    texture = make_body_feature(body, (pad, ["Face{}".format(outer + 1)]), HexSurfaceCut)
+    texture.Label = "HexTexture"
+    texture.CellSize = 5
+    texture.Wall = 1.2
+    texture.Margin = 4
+    texture.CornerRadius = 0.6
+    texture.Depth = 0.6
+    sk.Visibility = False
+    doc.recompute()
+    return body, texture
+
+
 def main():
     if not App.GuiUp:
         App.Console.PrintWarning("Run with the GUI so objects get view providers.\n")
@@ -93,6 +120,11 @@ def main():
     doc = App.newDocument("vent_cover")
     build_vent_cover(doc)
     doc.saveAs(os.path.join(HERE, "vent_cover.FCStd"))
+    App.closeDocument(doc.Name)
+
+    doc = App.newDocument("cylinder_texture")
+    build_cylinder_texture(doc)
+    doc.saveAs(os.path.join(HERE, "cylinder_texture.FCStd"))
     App.closeDocument(doc.Name)
 
 

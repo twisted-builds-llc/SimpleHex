@@ -2,7 +2,7 @@
 
 Open source FreeCAD workbench that fills a closed sketch or planar face with a parametric hexagon (honeycomb) pattern. Useful for 3D-print lightweighting, vents and grilles, and laser/plasma sheet parts.
 
-**Status:** early development (milestone M3 done). Not yet in the Addon Manager.
+**Status:** early development (milestone M4 done). Not yet in the Addon Manager.
 
 ## Install (development)
 Link or clone this repository into your FreeCAD `Mod` folder, e.g. on Linux:
@@ -18,6 +18,15 @@ Restart FreeCAD and pick the **HexFill** workbench.
 4. For laser/plasma, select the HexFill and use **HexFill → Export to DXF**. The source outline is exported with it.
 
 Edge modes: **WholeOnly** keeps only complete cells (no slivers), **Clip** trims edge cells to the margin, **ClipMinArea** trims but drops pieces smaller than `MinCellFraction` of a cell.
+
+### Curved surfaces (cylinders and cones)
+Select one cylindrical or conical face and use the same commands:
+- **Hex Fill Region** makes a **HexSurface**: the cell solids, for you to cut from or fuse to the part. `Mode` Cut (recess, or through the wall with `Depth` 0) or Emboss (raised cells).
+- **Hex Fill Cut / Hex Fill Pad** on a face inside a Body make the PartDesign equivalents.
+
+Cells are unrolled exactly, so they keep their true size on the surface. Walls follow the surface normal, so through-holes narrow towards the axis. On a full 360° cylinder the pitch is adjusted so a whole number of cells fits around; the read-only `Pitch` shows the value used. `Angle` must be 0 for a full wrap. On cones the seam is treated as an edge (no wrap).
+
+Curved Booleans are much slower than flat ones (about 3–11 s for ~120 cells on a tube, more with rounded corners), so live preview is off by default for curved faces; use **Refresh** in the task panel.
 
 ### PartDesign
 Select a sketch or a planar face inside a Body and click **Hex Fill Cut** or **Hex Fill Pad**. These are native Body features: they sit in the tree like a Pocket or Pad and update when the sketch changes.

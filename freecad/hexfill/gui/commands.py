@@ -6,11 +6,22 @@ from PySide import QtGui
 from .. import icon
 from ..export import export_dxf
 from ..features.hexfill import make_hexfill
-from ..features.pd_features import HexFillCut, HexFillPad, make_body_feature
+from ..features.pd_features import (HexFillCut, HexFillPad, HexSurfaceCut, HexSurfacePad,
+                                   make_body_feature)
+from ..features.surface import is_supported_face, make_hexsurface
+
+
+def _curved_face(sel):
+    """True when the selection is one cylindrical or conical face."""
+    names = [n for n in sel.SubElementNames if n]
+    if len(names) != 1 or not names[0].startswith("Face"):
+        return False
+    return is_supported_face(sel.Object.Shape.getElement(names[0]))
 
 
 def _is_hexfill(obj):
-    return obj.isDerivedFrom("Part::FeaturePython") and "CellSize" in obj.PropertiesList
+    """A flat HexFill (Part feature with an Output), the only DXF-exportable kind."""
+    return obj.isDerivedFrom("Part::FeaturePython") and "Output" in obj.PropertiesList
 
 
 class HexFillRegionCommand:
@@ -18,7 +29,9 @@ class HexFillRegionCommand:
         return {
             "Pixmap": icon("HexFill.svg"),
             "MenuText": "Hex Fill Region",
-            "ToolTip": "Fill a closed sketch, wire, or planar face with a hex pattern",
+            "ToolTip": "Fill a closed sketch, wire, or planar face with a hex pattern. "
+                       "On a cylindrical or conical face, make hex cell solids to "
+                       "cut or emboss",
         }
 
     def IsActive(self):
@@ -29,7 +42,9 @@ class HexFillRegionCommand:
         doc = App.ActiveDocument
         # Persistent, so it outlives this command; the task panel closes it.
         App.setActiveTransaction("Hex Fill Region", True)
-        obj = make_hexfill(doc, (sel.Object, list(sel.SubElementNames)))
+        source = (sel.Object, list(sel.SubElementNames))
+        make = make_hexsurface if _curved_face(sel) else make_hexfill
+        obj = make(doc, source)
         doc.recompute()
         Gui.ActiveDocument.setEdit(obj, 0)
 
@@ -46,8 +61,9 @@ def _body_for(obj):
 class BodyFeatureCommand:
     """Create a HexFillCut or HexFillPad in the Body of the selected sketch/face."""
 
-    def __init__(self, feature_class, pixmap, menu_text, tooltip):
+    def __init__(self, feature_class, surface_class, pixmap, menu_text, tooltip):
         self.feature_class = feature_class
+        self.surface_class = surface_class
         self.resources = {"Pixmap": icon(pixmap), "MenuText": menu_text, "ToolTip": tooltip}
 
     def GetResources(self):
@@ -65,8 +81,8 @@ class BodyFeatureCommand:
                 "Select a sketch or face inside a PartDesign Body, or activate a Body.")
             return
         App.setActiveTransaction(self.resources["MenuText"], True)
-        obj = make_body_feature(body, (sel.Object, list(sel.SubElementNames)),
-                                self.feature_class)
+        feature_class = self.surface_class if _curved_face(sel) else self.feature_class
+        obj = make_body_feature(body, (sel.Object, list(sel.SubElementNames)), feature_class)
         App.ActiveDocument.recompute()
         Gui.ActiveDocument.setEdit(obj, 0)
 
@@ -100,11 +116,13 @@ class ExportDxfCommand:
 COMMANDS = {
     "HexFill_Region": HexFillRegionCommand(),
     "HexFill_Cut": BodyFeatureCommand(
-        HexFillCut, "HexFillCut.svg", "Hex Fill Cut",
-        "Cut a hex pattern into the Body (PartDesign feature)"),
+        HexFillCut, HexSurfaceCut, "HexFillCut.svg", "Hex Fill Cut",
+        "Cut a hex pattern into the Body (PartDesign feature). Works on sketches, "
+        "planar faces, and cylindrical or conical faces"),
     "HexFill_Pad": BodyFeatureCommand(
-        HexFillPad, "HexFillPad.svg", "Hex Fill Pad",
-        "Raise a hex pattern on the Body (PartDesign feature)"),
+        HexFillPad, HexSurfacePad, "HexFillPad.svg", "Hex Fill Pad",
+        "Raise a hex pattern on the Body (PartDesign feature). Works on sketches, "
+        "planar faces, and cylindrical or conical faces"),
     "HexFill_ExportDXF": ExportDxfCommand(),
 }
 

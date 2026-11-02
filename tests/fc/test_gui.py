@@ -134,6 +134,51 @@ def main():
     assert len(doc.Objects) == count and body.Tip == cut
     log("PASS Hex Fill Pad + Cancel")
 
+    # Curved face: Hex Fill Region makes a HexSurface; Cut makes a HexSurfaceCut
+    tube = doc.addObject("Part::Feature", "Tube")
+    tube.Shape = Part.makeCylinder(25, 40).cut(Part.makeCylinder(22, 40))
+    outer = next(i for i, f in enumerate(tube.Shape.Faces)
+                 if isinstance(f.Surface, Part.Cylinder) and f.Surface.Radius > 24)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(tube, "Face{}".format(outer + 1))
+    Gui.runCommand("HexFill_Region")
+    surface = doc.getObject("HexSurface")
+    panel = active_panel()
+    assert panel.has_mode and not panel.has_output and not panel.has_reversed
+    assert panel.preview_key == "LivePreviewSurface"
+    assert panel.depth_label.text() == "Depth (0 = through)"  # Cut is the default mode
+    panel.mode.setCurrentIndex(1)
+    assert surface.Mode == "Emboss" and panel.depth_label.text() == "Depth"
+    panel.mode.setCurrentIndex(0)
+    assert panel.depth_label.text() == "Depth (0 = through)"
+    panel.accept()
+    assert surface.isValid(), surface.getStatusString()
+    assert surface.CellCount > 0 and surface.Shape.Solids
+    log("PASS Hex Pattern on Surface")
+
+    ring = doc.addObject("Sketcher::SketchObject", "RingSketch")
+    body2 = doc.addObject("PartDesign::Body", "Body001")
+    body2.addObject(ring)
+    ring.addGeometry(Part.Circle(App.Vector(), App.Vector(0, 0, 1), 20))
+    ring.addGeometry(Part.Circle(App.Vector(), App.Vector(0, 0, 1), 17))
+    ring_pad = body2.newObject("PartDesign::Pad", "RingPad")
+    ring_pad.Profile = ring
+    ring_pad.Length = 30
+    doc.recompute()
+    outer = next(i for i, f in enumerate(ring_pad.Shape.Faces)
+                 if isinstance(f.Surface, Part.Cylinder) and f.Surface.Radius > 19)
+    Gui.Selection.clearSelection()
+    Gui.Selection.addSelection(ring_pad, "Face{}".format(outer + 1))
+    Gui.runCommand("HexFill_Cut")
+    vent = doc.getObject("HexSurfaceCut")
+    panel = active_panel()
+    assert vent is not None and body2.Tip == vent
+    assert panel.depth_label.text() == "Depth (0 = through)"
+    panel.accept()
+    assert vent.isValid(), vent.getStatusString()
+    assert vent.ViewObject.Proxy.getIcon().endswith("HexFillCut.svg")
+    log("PASS Hex Fill Cut on a curved face")
+
 
 try:
     main()
@@ -141,4 +186,5 @@ try:
 except Exception:
     traceback.print_exc(file=OUT)
     status = 1
+OUT.flush()
 os._exit(status)

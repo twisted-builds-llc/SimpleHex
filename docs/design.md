@@ -236,7 +236,7 @@ The layout follows the FreeCAD Addon Academy's namespace-package convention. Con
 | M1 | Flat fill, WholeOnly | `hexgrid.py` + `HexFill` object, properties only | Fills an arbitrary closed sketch with holes; pytest passing |
 | M2 | Edge modes + polish | Clip, ClipMinArea, CornerRadius, task panel, icons | Task panel live preview; plasma example part produces clean DXF |
 | M3 | PartDesign features | `HexFillCut` / `HexFillPad` | Works as a native Body feature, survives save/reopen and upstream sketch edits |
-| M4 | Cylinder / cone | `HexSurface` (developable) | Hex vent around a tube, recess texture on a cylinder, seam pitch correction |
+| M4 | Cylinder / cone | `HexSurface` (developable) + `HexSurfaceCut` / `HexSurfacePad` | Hex vent around a tube, recess texture on a cylinder, seam pitch correction |
 | M5 | Freeform faces | Projection mode | Texture on a gently curved B-spline face |
 | M6 | Release | package.xml, README, wiki page, catalog PR | Installable from the Addon Manager |
 
@@ -246,6 +246,7 @@ FreeCAD 1.0 was not available to test; re-check these there.
 - **Body membership:** a `Part::FeaturePython` cannot be added to a Body ("object is not allowed").
 - **`PartDesign::FeatureSubtractivePython`** works: added to a Body it gets `BaseFeature` set automatically, becomes the Tip, and exposes `AddSubShape` and `Refine`. M3 can build on it.
 - **M3 conventions:** HexFillCut `Depth = 0` cuts through all on *both* sides of the sketch plane (the usual intent for vents; differs from Pocket's one-sided Through All). Face sources use the face's outward normal. A result with more than one solid is an error.
+- **M4 findings:** Booleans on cylindrical faces are inherently slow in OCC (300 plain radial drill holes in a tube: 7.5 s vs 0.4 s in a plate; already multi-threaded). Mitigations used: canonical coaxial offset surfaces instead of `Part.OffsetSurface` (which also produced invalid faces on rotated cylinders), one template tool per whole cylinder cell placed by rotate/slide, exact rational pcurves for rounded corners on cylinders (halves Boolean time), and live preview off by default for curved faces. Cone full wraps cannot be made periodic (the unrolled sector is not translation-periodic), so the seam is a boundary. Cuts start above any material proud of the face (bounding-box clearance) so earlier embossing is cut cleanly.
 - **`makeOffset2D` with holes** is wrong (see §6.2); HexFill offsets each wire separately.
 - **Task panel transactions:** use `App.setActiveTransaction(name, True)` / `App.closeActiveTransaction(abort)`, and close the transaction *before* `resetEdit()`, which otherwise commits it.
 - **DXF export:** FreeCAD's exporter writes all-line wires as LWPOLYLINE but wires with arcs (rounded cells) as loose LINE/ARC entities. Contours are closed and free of duplicates (checked in tests).
