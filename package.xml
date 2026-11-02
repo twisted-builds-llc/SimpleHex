@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
+  <name>HexFill</name>
+  <description>Fill closed sketches and faces with a parametric hexagon (honeycomb) pattern.</description>
+  <version>0.1.0</version>
+  <date>2026-11-02</date>
+  <maintainer email="dalefollett18@yahoo.com">Dale Follett</maintainer>
+  <license file="LICENSE">LGPL-2.1-or-later</license>
+  <url type="repository" branch="main">https://github.com/REPLACE_ME/hexagons_for_FreeCAD</url>
+  <icon>freecad/hexfill/resources/icons/HexFill.svg</icon>
+
+  <content>
+    <workbench>
+      <classname>HexFillWorkbench</classname>
+      <subdirectory>./</subdirectory>
+      <freecadmin>1.0.0</freecadmin>
+      <pythonmin>3.8</pythonmin>
+      <tag>pattern</tag>
+      <tag>honeycomb</tag>
+      <tag>hexagon</tag>
+    </workbench>
+  </content>
+</package>
